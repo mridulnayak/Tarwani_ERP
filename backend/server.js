@@ -23,38 +23,40 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
+        // --- TEMPORARY DEMO OVERRIDE FOR YOUR PRESENTATION ---
+        if (username === 'admin' && password === 'admin123') {
+            const token = jwt.sign(
+                { userId: 1, role: 'Admin', username: 'admin' }, 
+                JWT_SECRET, 
+                { expiresIn: '12h' }
+            );
+            return res.status(200).json({
+                message: 'Login successful',
+                token,
+                user: { username: 'admin', role: 'Admin' }
+            });
+        }
+        // -----------------------------------------------------
+
         const pool = await sql.connect(dbConfig);
-        
-        // 1. Find the user in the database
         const userResult = await pool.request()
             .input('username', sql.VarChar, username)
             .query(`SELECT UserID, Username, PasswordHash, Role, EmployeeID FROM mridul.Users WHERE Username = @username AND IsActive = 1`);
         
         const user = userResult.recordset[0];
 
-        if (!user) {
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
+        if (!user) return res.status(401).json({ error: 'Invalid username or password' });
 
-        // 2. Verify the password using bcrypt
         const isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid username or password' });
-        }
+        if (!isPasswordValid) return res.status(401).json({ error: 'Invalid username or password' });
 
-        // 3. Generate the JWT (Digital ID Card)
         const token = jwt.sign(
             { userId: user.UserID, role: user.Role, username: user.Username },
             JWT_SECRET,
-            { expiresIn: '12h' } // Token expires in 12 hours (a standard shift)
+            { expiresIn: '12h' }
         );
 
-        // 4. Send token and user data to the frontend
-        res.status(200).json({
-            message: 'Login successful',
-            token,
-            user: { username: user.Username, role: user.Role }
-        });
+        res.status(200).json({ message: 'Login successful', token, user: { username: user.Username, role: user.Role } });
 
     } catch (err) {
         console.error('Login Error:', err);
