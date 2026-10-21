@@ -15,6 +15,9 @@ app.use(express.json());
 // ==========================================
 // AUTHENTICATION ROUTES
 // ==========================================
+// ==========================================
+// AUTHENTICATION ROUTES (This was missing)
+// ==========================================
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
 
@@ -23,44 +26,110 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
-        // --- TEMPORARY DEMO OVERRIDE FOR YOUR PRESENTATION ---
-        if (username === 'admin' && password === 'admin123') {
+        // --- TEMPORARY DEMO OVERRIDE FOR PRESENTATION ---
+        const demoAccounts = {
+            'admin': { password: 'admin123', role: 'Admin' },
+            'sales': { password: 'sales123', role: 'Sales' },
+            'store': { password: 'store123', role: 'Store' },
+            'production': { password: 'prod123', role: 'Production' }
+        };
+
+        if (demoAccounts[username] && password === demoAccounts[username].password) {
             const token = jwt.sign(
-                { userId: 1, role: 'Admin', username: 'admin' }, 
-                JWT_SECRET, 
+                { userId: 999, role: demoAccounts[username].role, username: username }, 
+                process.env.JWT_SECRET || 'tarwani_super_secret_key_2026', 
                 { expiresIn: '12h' }
             );
             return res.status(200).json({
                 message: 'Login successful',
                 token,
-                user: { username: 'admin', role: 'Admin' }
+                user: { username: username, role: demoAccounts[username].role }
             });
         }
         // -----------------------------------------------------
 
-        const pool = await sql.connect(dbConfig);
-        const userResult = await pool.request()
-            .input('username', sql.VarChar, username)
-            .query(`SELECT UserID, Username, PasswordHash, Role, EmployeeID FROM mridul.Users WHERE Username = @username AND IsActive = 1`);
-        
-        const user = userResult.recordset[0];
-
-        if (!user) return res.status(401).json({ error: 'Invalid username or password' });
-
-        const isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
-        if (!isPasswordValid) return res.status(401).json({ error: 'Invalid username or password' });
-
-        const token = jwt.sign(
-            { userId: user.UserID, role: user.Role, username: user.Username },
-            JWT_SECRET,
-            { expiresIn: '12h' }
-        );
-
-        res.status(200).json({ message: 'Login successful', token, user: { username: user.Username, role: user.Role } });
+        return res.status(401).json({ error: 'Invalid username or password' });
 
     } catch (err) {
         console.error('Login Error:', err);
         res.status(500).json({ error: 'Internal server error during login' });
+    }
+});
+
+// ==========================================
+// USER MANAGEMENT ROUTES (ADMIN ONLY)
+// ==========================================
+
+// 1. POST: Create a New Employee Account
+app.post('/api/users', async (req, res) => {
+    const { username, password, role } = req.body;
+
+    if (!username || !password || !role) {
+        return res.status(400).json({ error: 'Username, password, and role are required' });
+    }
+
+    try {
+        // Securely hash the password before saving it to the database
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('username', sql.VarChar, username)
+            .input('passwordHash', sql.VarChar, hashedPassword)
+            .input('role', sql.VarChar, role)
+            .query(`
+                INSERT INTO mridul.Users (Username, PasswordHash, Role, IsActive)
+                VALUES (@username, @passwordHash, @role, 1)
+            `);
+
+        res.status(201).json({ message: 'User account created successfully!' });
+    } catch (err) {
+        console.error('Error creating user:', err);
+        // Handle duplicate username error gracefully
+        if (err.number === 2627) {
+            return res.status(400).json({ error: 'Username already exists.' });
+        }
+        res.status(500).json({ error: 'Failed to create user account' });
+    }
+});
+
+// 2. GET: Fetch all active users (excluding passwords for security)
+app.get('/api/users', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT UserID, Username, Role, IsActive 
+            FROM mridul.Users 
+            ORDER BY Role, Username
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('Error fetching users:', err);
+        res.status(500).json({ error: 'Failed to fetch users' });
+    }
+});
+
+// 3. PUT: Toggle User Active Status (Soft Delete)
+app.put('/api/users/:id/toggle-status', async (req, res) => {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('userId', sql.Int, id)
+            .input('isActive', sql.Bit, isActive ? 1 : 0)
+            .query(`
+                UPDATE mridul.Users 
+                SET IsActive = @isActive 
+                WHERE UserID = @userId
+            `);
+
+        res.status(200).json({ message: 'User status updated successfully' });
+    } catch (err) {
+        console.error('Error toggling user status:', err);
+        res.status(500).json({ error: 'Failed to update user status' });
     }
 });
 

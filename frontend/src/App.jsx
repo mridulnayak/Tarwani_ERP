@@ -13,6 +13,7 @@ import FinishedGoods from './components/FinishedGoods';
 import SalesOrder from './components/SalesOrder';
 import SalesDispatch from './components/SalesDispatch';
 import Dashboard from './components/Dashboard';
+import UserManagement from './components/UserManagement';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('');
@@ -58,6 +59,7 @@ const setDefaultTab = (role) => {
   const allNavItems = [
     //dashboard
     { id: 'dashboard', label: '📊 Dashboard Overview', allowedRoles: ['Admin'] },
+    { id: 'users', label: '👥 User Management', allowedRoles: ['Admin'] },
     // Core Masters (Admin Only)
     { id: 'party', label: 'Party Master', allowedRoles: ['Admin'] },
     { id: 'designation', label: 'Designation Master', allowedRoles: ['Admin'] },
@@ -85,6 +87,7 @@ const setDefaultTab = (role) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard user={user} />;
+      case 'users': return <UserManagement />;
       case 'party': return <PartyMaster />;
       case 'designation': return <DesignationMaster />;
       case 'brand': return <BrandMaster />;
