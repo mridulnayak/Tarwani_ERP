@@ -186,19 +186,17 @@ sql.connect(dbConfig).then(() => {
 // 1. POST: Create a new Designation
 app.post('/api/designations', async (req, res) => {
     try {
-        // Grab the name the user typed in the frontend
         const { designationName } = req.body; 
         
         if (!designationName) {
             return res.status(400).json({ error: 'Designation Name is required' });
         }
 
-        // Connect to the DB and insert the new designation
         const pool = await sql.connect(dbConfig);
         await pool.request()
-            // We use .input() to safely prevent SQL Injection attacks
             .input('name', sql.VarChar, designationName) 
-            .query('INSERT INTO DesignationMaster (DesignationName) VALUES (@name)');
+            // FIXED: Added 'mridul.' schema prefix
+            .query('INSERT INTO mridul.DesignationMaster (DesignationName) VALUES (@name)');
 
         res.status(201).json({ message: 'Designation created successfully!' });
     } catch (err) {
@@ -211,9 +209,9 @@ app.post('/api/designations', async (req, res) => {
 app.get('/api/designations', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query('SELECT * FROM DesignationMaster');
+        // FIXED: Added 'mridul.' schema prefix
+        const result = await pool.request().query('SELECT * FROM mridul.DesignationMaster');
         
-        // Send the database rows back to the frontend
         res.status(200).json(result.recordset); 
     } catch (err) {
         console.error('Error fetching designations:', err);
@@ -221,64 +219,155 @@ app.get('/api/designations', async (req, res) => {
     }
 });
 
-// ==========================================
-// UNIFIED PARTY MASTER ROUTES
-// ==========================================
-
-// 1. POST: Create a new Party (Employee, Vendor, or Customer)
-app.post('/api/parties', async (req, res) => {
+// Update an existing designation (EDIT)
+app.put('/api/designations/:id', async (req, res) => {
     try {
-        const { partyName, partyType, designationId, contactNumber, address } = req.body; 
+        const { id } = req.params;
+        const { designationName } = req.body;
         
-        if (!partyName || !partyType) {
-            return res.status(400).json({ error: 'Party Name and Type are required' });
-        }
+        if (!designationName) return res.status(400).json({ error: 'Designation name is required' });
 
         const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('name', sql.VarChar, partyName) 
-            .input('type', sql.VarChar, partyType) 
-            // If it's an Employee, save the Designation. Otherwise, save NULL.
-            .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null) 
-            // If it's NOT an Employee, save Contact/Address. Otherwise, save NULL.
-            .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
-            .input('address', sql.Text, partyType !== 'Employee' ? address : null)
-            .query(`
-                INSERT INTO mridul.PartyMaster (PartyName, PartyType, DesignationID, ContactNumber, Address) 
-                VALUES (@name, @type, @desigId, @contact, @address)
-            `);
-
-        res.status(201).json({ message: `${partyType} created successfully!` });
-    } catch (err) {
-        console.error('Error creating party:', err);
-        res.status(500).json({ error: 'Failed to create party record' });
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.VarChar, designationName)
+            .query('UPDATE mridul.DesignationMaster SET DesignationName = @name WHERE DesignationID = @id');
+        
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Designation not found' });
+        res.status(200).json({ message: 'Designation updated successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to update designation' }); 
     }
 });
 
-// 2. GET: Fetch all Parties
-app.get('/api/parties', async (req, res) => {
+// Delete a designation (DELETE)
+app.delete('/api/designations/:id', async (req, res) => {
     try {
+        const { id } = req.params;
+
         const pool = await sql.connect(dbConfig);
-        // LEFT JOIN ensures we get ALL parties, even if they don't have a Designation
-        const result = await pool.request().query(`
-            SELECT 
-                p.PartyID, 
-                p.PartyName, 
-                p.PartyType, 
-                p.ContactNumber,
-                p.Address,
-                d.DesignationName 
-            FROM mridul.PartyMaster p
-            LEFT JOIN mridul.DesignationMaster d ON p.DesignationID = d.DesignationID
-            ORDER BY p.PartyType, p.PartyName
-        `);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.DesignationMaster WHERE DesignationID = @id');
         
-        res.status(200).json(result.recordset); 
-    } catch (err) {
-        console.error('Error fetching parties:', err);
-        res.status(500).json({ error: 'Failed to fetch parties' });
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Designation not found' });
+        res.status(200).json({ message: 'Designation deleted successfully!' });
+    } catch (err) { 
+        // This will trigger if the designation is tied to an employee in PartyMaster via a Foreign Key
+        res.status(500).json({ error: 'Failed to delete designation. Ensure no employees are assigned to this role first.' }); 
     }
 });
+
+// // ==========================================
+// // UNIFIED PARTY MASTER ROUTES
+// // ==========================================
+
+// // 1. POST: Create a new Party (Employee, Vendor, or Customer)
+// app.post('/api/parties', async (req, res) => {
+//     try {
+//         const { partyName, partyType, designationId, contactNumber, address } = req.body; 
+        
+//         if (!partyName || !partyType) {
+//             return res.status(400).json({ error: 'Party Name and Type are required' });
+//         }
+
+//         const pool = await sql.connect(dbConfig);
+//         await pool.request()
+//             .input('name', sql.VarChar, partyName) 
+//             .input('type', sql.VarChar, partyType) 
+//             // If it's an Employee, save the Designation. Otherwise, save NULL.
+//             .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null) 
+//             // If it's NOT an Employee, save Contact/Address. Otherwise, save NULL.
+//             .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
+//             .input('address', sql.Text, partyType !== 'Employee' ? address : null)
+//             .query(`
+//                 INSERT INTO mridul.PartyMaster (PartyName, PartyType, DesignationID, ContactNumber, Address) 
+//                 VALUES (@name, @type, @desigId, @contact, @address)
+//             `);
+
+//         res.status(201).json({ message: `${partyType} created successfully!` });
+//     } catch (err) {
+//         console.error('Error creating party:', err);
+//         res.status(500).json({ error: 'Failed to create party record' });
+//     }
+// });
+
+// // 2. GET: Fetch all Parties
+// app.get('/api/parties', async (req, res) => {
+//     try {
+//         const pool = await sql.connect(dbConfig);
+//         // LEFT JOIN ensures we get ALL parties, even if they don't have a Designation
+//         const result = await pool.request().query(`
+//             SELECT 
+//                 p.PartyID, 
+//                 p.PartyName, 
+//                 p.PartyType, 
+//                 p.ContactNumber,
+//                 p.Address,
+//                 d.DesignationName 
+//             FROM mridul.PartyMaster p
+//             LEFT JOIN mridul.DesignationMaster d ON p.DesignationID = d.DesignationID
+//             ORDER BY p.PartyType, p.PartyName
+//         `);
+        
+//         res.status(200).json(result.recordset); 
+//     } catch (err) {
+//         console.error('Error fetching parties:', err);
+//         res.status(500).json({ error: 'Failed to fetch parties' });
+//     }
+// });
+
+// // Update an existing party (EDIT)
+// app.put('/api/parties/:id', async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body;
+        
+//         if (!partyName) return res.status(400).json({ error: 'Party Name is required' });
+
+//         const pool = await sql.connect(dbConfig);
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .input('partyName', sql.VarChar, partyName)
+//             .input('partyType', sql.VarChar, partyType)
+//             .input('designationId', sql.Int, designationId || null)
+//             .input('contactNumber', sql.VarChar, contactNumber || null)
+//             .input('address', sql.VarChar, address || null)
+//             .input('gstNumber', sql.VarChar, gstNumber || null)
+//             .query(`
+//                 UPDATE mridul.PartyMaster 
+//                 SET PartyName = @partyName, 
+//                     PartyType = @partyType, 
+//                     DesignationID = @designationId, 
+//                     ContactNumber = @contactNumber, 
+//                     Address = @address, 
+//                     GSTNumber = @gstNumber
+//                 WHERE PartyID = @id
+//             `);
+        
+//         if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Party not found' });
+//         res.status(200).json({ message: 'Party updated successfully!' });
+//     } catch (err) { 
+//         res.status(500).json({ error: 'Failed to update party' }); 
+//     }
+// });
+
+// // Delete a party (DELETE)
+// app.delete('/api/parties/:id', async (req, res) => {
+//     try {
+//         const { id } = req.params;
+
+//         const pool = await sql.connect(dbConfig);
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .query('DELETE FROM mridul.PartyMaster WHERE PartyID = @id');
+        
+//         if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Party not found' });
+//         res.status(200).json({ message: 'Party deleted successfully!' });
+//     } catch (err) { 
+//         res.status(500).json({ error: 'Failed to delete party. It is likely tied to existing orders.' }); 
+//     }
+// });
 
 // ==========================================
 // BRAND MASTER ROUTES
@@ -302,6 +391,44 @@ app.get('/api/brands', async (req, res) => {
         const result = await pool.request().query('SELECT * FROM mridul.BrandMaster');
         res.status(200).json(result.recordset);
     } catch (err) { res.status(500).json({ error: 'Failed to fetch brands' }); }
+});
+
+// Update an existing brand (EDIT)
+app.put('/api/brands/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { brandName } = req.body;
+        
+        if (!brandName) return res.status(400).json({ error: 'Brand name is required' });
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.VarChar, brandName)
+            .query('UPDATE mridul.BrandMaster SET BrandName = @name WHERE BrandID = @id');
+        
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Brand not found' });
+        res.status(200).json({ message: 'Brand updated successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to update brand' }); 
+    }
+});
+
+// Delete a brand (DELETE)
+app.delete('/api/brands/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.BrandMaster WHERE BrandID = @id');
+        
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Brand not found' });
+        res.status(200).json({ message: 'Brand deleted successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to delete brand. It is likely tied to existing products.' }); 
+    }
 });
 
 // ==========================================
@@ -333,6 +460,52 @@ app.get('/api/products', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Failed to fetch products' }); }
 });
 
+// Update an existing product (EDIT)
+app.put('/api/products/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { productName, brandId } = req.body;
+        
+        if (!productName || !brandId) return res.status(400).json({ error: 'Name and Brand are required' });
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.VarChar, productName)
+            .input('brandId', sql.Int, brandId)
+            .query('UPDATE mridul.ProductMaster SET ProductName = @name, BrandID = @brandId WHERE ProductID = @id');
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        res.status(200).json({ message: 'Product updated successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to update product' }); 
+    }
+});
+
+// Delete a product (DELETE)
+app.delete('/api/products/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.ProductMaster WHERE ProductID = @id');
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'Product not found' });
+        }
+        
+        res.status(200).json({ message: 'Product deleted successfully!' });
+    } catch (err) { 
+        // Handles Foreign Key constraint errors if the product is already used in active orders
+        res.status(500).json({ error: 'Failed to delete product. It may be linked to existing production or sales orders.' }); 
+    }
+});
+
 // ==========================================
 // TANK MASTER ROUTES
 // ==========================================
@@ -356,6 +529,45 @@ app.get('/api/tanks', async (req, res) => {
         const result = await pool.request().query('SELECT * FROM mridul.TankMaster');
         res.status(200).json(result.recordset);
     } catch (err) { res.status(500).json({ error: 'Failed to fetch tanks' }); }
+});
+
+// Update an existing tank (EDIT)
+app.put('/api/tanks/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { tankName, capacity } = req.body;
+        
+        if (!tankName || !capacity) return res.status(400).json({ error: 'Tank name and capacity are required' });
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.VarChar, tankName)
+            .input('capacity', sql.Int, capacity)
+            .query('UPDATE mridul.TankMaster SET TankName = @name, Capacity = @capacity WHERE TankID = @id');
+        
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Tank not found' });
+        res.status(200).json({ message: 'Tank updated successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to update tank' }); 
+    }
+});
+
+// Delete a tank (DELETE)
+app.delete('/api/tanks/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.TankMaster WHERE TankID = @id');
+        
+        if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Tank not found' });
+        res.status(200).json({ message: 'Tank deleted successfully!' });
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to delete tank. Ensure it is not tied to existing inventory records.' }); 
+    }
 });
 
 //GST & parties
@@ -408,13 +620,75 @@ app.get('/api/parties', async (req, res) => {
     }
 });
 
+// 3. PUT: Update an existing Party (EDIT)
+app.put('/api/parties/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body;
+        
+        if (!partyName || !partyType) {
+            return res.status(400).json({ error: 'Party Name and Type are required' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('name', sql.VarChar, partyName)
+            .input('type', sql.VarChar, partyType)
+            .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null)
+            .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
+            .input('address', sql.Text, partyType !== 'Employee' ? address : null)
+            .input('gst', sql.VarChar, partyType !== 'Employee' ? gstNumber : null)
+            .query(`
+                UPDATE mridul.PartyMaster 
+                SET PartyName = @name, 
+                    PartyType = @type, 
+                    DesignationID = @desigId, 
+                    ContactNumber = @contact, 
+                    Address = @address, 
+                    GSTNumber = @gst
+                WHERE PartyID = @id
+            `);
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'Party not found' });
+        }
+        
+        res.status(200).json({ message: 'Party updated successfully!' });
+    } catch (err) { 
+        console.error('Error updating party:', err);
+        res.status(500).json({ error: 'Failed to update party' }); 
+    }
+});
+
+// 4. DELETE: Remove a Party
+app.delete('/api/parties/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.PartyMaster WHERE PartyID = @id');
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'Party not found' });
+        }
+        
+        res.status(200).json({ message: 'Party deleted successfully!' });
+    } catch (err) { 
+        console.error('Error deleting party:', err);
+        // Foreign Key Protection: Will fail if the customer/vendor has active orders
+        res.status(500).json({ error: 'Failed to delete party. They are likely tied to existing orders or ledger entries.' }); 
+    }
+});
+
 // ==========================================
 // PURCHASE ORDER ROUTES
 // ==========================================
 
-// 1. POST: Create a Purchase Order (Header + Details Transaction)
+// 1. POST: Create a Purchase Order
 app.post('/api/purchase-orders', async (req, res) => {
-    // We expect the frontend to send a vendorId and an array of items
     const { vendorId, items } = req.body; 
     
     if (!vendorId || !items || items.length === 0) {
@@ -425,26 +699,22 @@ app.post('/api/purchase-orders', async (req, res) => {
     const transaction = new sql.Transaction(pool);
 
     try {
-        await transaction.begin(); // START THE TRANSACTION
+        await transaction.begin(); 
 
-        // Step 1: Generate a unique PO Number (e.g., PO-169824...)
         const poNumber = `PO-${Date.now()}`;
 
-        // Step 2: Insert into Header Table
         const headerReq = new sql.Request(transaction);
         const headerResult = await headerReq
             .input('poNumber', sql.VarChar, poNumber)
             .input('vendorId', sql.Int, vendorId)
             .query(`
-                INSERT INTO mridul.PurchaseOrderHeader (PONumber, VendorID) 
+                INSERT INTO mridul.PurchaseOrderHeader (PONumber, VendorID, Status) 
                 OUTPUT INSERTED.PO_ID 
-                VALUES (@poNumber, @vendorId)
+                VALUES (@poNumber, @vendorId, 'Pending')
             `);
         
-        // Grab the auto-generated ID of the new Header
         const newPoId = headerResult.recordset[0].PO_ID; 
 
-        // Step 3: Loop through the items array and insert into Details Table
         for (const item of items) {
             const detailReq = new sql.Request(transaction);
             await detailReq
@@ -458,12 +728,13 @@ app.post('/api/purchase-orders', async (req, res) => {
                 `);
         }
 
-        await transaction.commit(); // IF EVERYTHING SUCCEEDS, SAVE TO DATABASE
+        await transaction.commit(); 
         res.status(201).json({ message: 'Purchase Order created successfully!', poNumber });
 
     } catch (err) {
-        await transaction.rollback(); // IF ANYTHING FAILS, UNDO EVERYTHING
-        console.error('Transaction Failed:', err);
+        // Enterprise Safe Rollback
+        try { await transaction.rollback(); } catch (rollbackErr) { console.error(rollbackErr); }
+        console.error('PO Transaction Failed:', err);
         res.status(500).json({ error: 'Failed to generate Purchase Order' });
     }
 });
@@ -487,24 +758,90 @@ app.get('/api/purchase-orders', async (req, res) => {
     }
 });
 
+// 2b. GET: Fetch specific line items for a Purchase Order (used for PDF Generation)
+app.get('/api/purchase-orders/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('poId', sql.Int, id)
+            .query(`
+                SELECT 
+                    i.Quantity, 
+                    i.Rate, 
+                    p.ProductName 
+                FROM mridul.PurchaseOrderDetails i
+                INNER JOIN mridul.ProductMaster p ON i.ProductID = p.ProductID
+                WHERE i.PO_ID = @poId
+            `);
+            
+        res.status(200).json(result.recordset);
+    } catch (err) { 
+        console.error('Error fetching PO items:', err);
+        res.status(500).json({ error: 'Failed to fetch purchase order items' }); 
+    }
+});
+
+// 3. DELETE: Cancel a pending PO (Enterprise Best Practice)
+app.delete('/api/purchase-orders/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+        
+        // Only allow deletion if the PO hasn't been received yet
+        const result = await pool.request()
+            .input('poId', sql.Int, id)
+            .query(`
+                DELETE FROM mridul.PurchaseOrderHeader 
+                WHERE PO_ID = @poId AND Status = 'Pending'
+            `);
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(400).json({ error: 'Cannot delete order. It is already received or does not exist.' });
+        }
+
+        res.status(200).json({ message: 'Purchase Order cancelled successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: 'Failed to cancel Purchase Order' });
+    }
+});
+
 // ==========================================
 // PURCHASE RECEIVING & INVENTORY ROUTES
 // ==========================================
+
 // 1. POST: Process Received Goods and Update Tank Stock
 app.post('/api/purchase-receiving', async (req, res) => {
     const { poId, productId, tankId, receivedQty, receivedBy } = req.body;
 
-    if (!poId || !productId || !tankId || !receivedQty) {
-        return res.status(400).json({ error: 'Missing required receiving details' });
+    // Strict validation to prevent negative or zero receipts
+    if (!poId || !productId || !tankId || !receivedQty || receivedQty <= 0) {
+        return res.status(400).json({ error: 'Valid PO, Product, Tank, and a positive Received Quantity are required.' });
     }
 
     const pool = await sql.connect(dbConfig);
     const transaction = new sql.Transaction(pool);
 
     try {
-        await transaction.begin(); // START INVENTORY TRANSACTION
+        await transaction.begin(); 
 
-        // Step 1: Log the Receiving Entry
+        // Step 1: Update PO Status FIRST (Double-Entry Protection)
+        // If it's already 'Received', rowsAffected will be 0, stopping the transaction.
+        const statusReq = new sql.Request(transaction);
+        const statusResult = await statusReq
+            .input('poId', sql.Int, poId)
+            .query(`
+                UPDATE mridul.PurchaseOrderHeader 
+                SET Status = 'Received' 
+                WHERE PO_ID = @poId AND Status = 'Pending'
+            `);
+
+        if (statusResult.rowsAffected[0] === 0) {
+            throw new Error('ALREADY_RECEIVED');
+        }
+
+        // Step 2: Log the Receiving Entry
         const receiptReq = new sql.Request(transaction);
         await receiptReq
             .input('poId', sql.Int, poId)
@@ -517,33 +854,44 @@ app.post('/api/purchase-receiving', async (req, res) => {
                 VALUES (@poId, @productId, @tankId, @qty, @receivedBy)
             `);
 
-        // Step 2: Add the received quantity to the Tank's CurrentStock
+        // Step 3: Add to Tank WITH Overfill Protection
         const tankReq = new sql.Request(transaction);
-        await tankReq
+        const tankResult = await tankReq
             .input('tankId', sql.Int, tankId)
             .input('qty', sql.Int, receivedQty)
             .query(`
                 UPDATE mridul.TankMaster 
-                SET CurrentStock = CurrentStock + @qty 
+                SET CurrentStock = ISNULL(CurrentStock, 0) + @qty 
+                OUTPUT INSERTED.CurrentStock, INSERTED.Capacity, INSERTED.TankName
                 WHERE TankID = @tankId
             `);
 
-        // Step 3: Update the PO Status (Mark as Received/Completed)
-        const statusReq = new sql.Request(transaction);
-        await statusReq
-            .input('poId', sql.Int, poId)
-            .query(`
-                UPDATE mridul.PurchaseOrderHeader 
-                SET Status = 'Received' 
-                WHERE PO_ID = @poId
-            `);
+        // Check if we just exceeded the physical capacity of the tank
+        if (tankResult.recordset.length > 0) {
+            const { CurrentStock, Capacity, TankName } = tankResult.recordset[0];
+            if (CurrentStock > Capacity) {
+                throw new Error(`OVERFILL:${TankName}:${Capacity}`);
+            }
+        }
 
-        await transaction.commit(); // COMMIT ALL CHANGES TO DATABASE
+        await transaction.commit(); 
         res.status(201).json({ message: 'Goods received and tank stock updated successfully!' });
 
     } catch (err) {
-        await transaction.rollback(); // UNDO IF ANYTHING FAILS
-        console.error('Receiving Transaction Failed:', err);
+        // Safe Rollback
+        try { await transaction.rollback(); } catch (rollbackErr) { console.error(rollbackErr); }
+        
+        console.error('Receiving Transaction Failed:', err.message || err);
+
+        // Friendly UI Errors
+        if (err.message === 'ALREADY_RECEIVED') {
+            return res.status(400).json({ error: 'This Purchase Order has already been received.' });
+        }
+        if (err.message && err.message.startsWith('OVERFILL')) {
+            const [_, tankName, capacity] = err.message.split(':');
+            return res.status(400).json({ error: `Cannot receive items. This will overfill ${tankName} (Max Capacity: ${capacity}L).` });
+        }
+
         res.status(500).json({ error: 'Failed to process receiving' });
     }
 });
@@ -551,26 +899,34 @@ app.post('/api/purchase-receiving', async (req, res) => {
 // ==========================================
 // PRODUCTION ORDER ROUTES
 // ==========================================
+
 // 1. POST: Generate a new Production Order
 app.post('/api/production-orders', async (req, res) => {
     try {
         const { productId, salesOrderRef, targetQuantity } = req.body;
 
+        // Enhanced Validation
         if (!productId || !targetQuantity || targetQuantity <= 0) {
-            return res.status(400).json({ error: 'Valid Product and Target Quantity are required' });
+            return res.status(400).json({ error: 'Valid Product and a positive Target Quantity are required' });
         }
 
         const pool = await sql.connect(dbConfig);
-        await pool.request()
+        const result = await pool.request()
             .input('productId', sql.Int, productId)
             .input('salesOrderRef', sql.VarChar, salesOrderRef || null)
             .input('targetQty', sql.Int, targetQuantity)
             .query(`
-                INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity)
-                VALUES (@productId, @salesOrderRef, @targetQty)
+                INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity, Status)
+                OUTPUT INSERTED.ProductionOrderID
+                VALUES (@productId, @salesOrderRef, @targetQty, 'Pending')
             `);
 
-        res.status(201).json({ message: 'Production Order generated successfully!' });
+        const newId = result.recordset[0].ProductionOrderID;
+
+        res.status(201).json({ 
+            message: 'Production Order generated successfully!',
+            productionOrderId: newId
+        });
     } catch (err) {
         console.error('Error creating Production Order:', err);
         res.status(500).json({ error: 'Failed to generate Production Order' });
@@ -581,7 +937,8 @@ app.post('/api/production-orders', async (req, res) => {
 app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        // We JOIN with ProductMaster to get the ProductName and current ClosingBalance
+        
+        // Excellent JOIN logic to pull in Product Name and current Inventory Balance
         const result = await pool.request().query(`
             SELECT 
                 po.ProductionOrderID, 
@@ -603,23 +960,54 @@ app.get('/api/production-orders', async (req, res) => {
     }
 });
 
+// 3. DELETE: Cancel a pending Production Order (Safe Delete)
+app.delete('/api/production-orders/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+        
+        // We add "AND Status = 'Pending'" to ensure we never delete an active/completed order
+        const result = await pool.request()
+            .input('poId', sql.Int, id)
+            .query(`
+                DELETE FROM mridul.ProductionOrder 
+                WHERE ProductionOrderID = @poId AND Status = 'Pending'
+            `);
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(400).json({ error: 'Cannot delete order. It either does not exist, or it is already In Progress/Completed.' });
+        }
+
+        res.status(200).json({ message: 'Production Order cancelled successfully.' });
+    } catch (err) {
+        console.error('Error deleting Production Order:', err);
+        res.status(500).json({ error: 'Failed to cancel Production Order' });
+    }
+});
+
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES
 // ==========================================
+
 // 1. POST: Issue Materials and Deduct from Tanks
 app.post('/api/issuals', async (req, res) => {
-    // The frontend will send the linked Production Order and an array of raw materials taken
     const { productionOrderId, issuedBy, items } = req.body; 
 
     if (!productionOrderId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Production Order and at least one item are required' });
     }
 
+    // Input Validation: Prevent zero or negative quantity issuals
+    const invalidItem = items.find(item => item.quantity <= 0);
+    if (invalidItem) {
+        return res.status(400).json({ error: 'All issued quantities must be greater than zero.' });
+    }
+
     const pool = await sql.connect(dbConfig);
     const transaction = new sql.Transaction(pool);
 
     try {
-        await transaction.begin(); // START TRANSACTION
+        await transaction.begin(); 
 
         // Step 1: Generate a unique Issue Number
         const issueNumber = `ISSUE-${Date.now()}`;
@@ -629,7 +1017,7 @@ app.post('/api/issuals', async (req, res) => {
         const headerResult = await headerReq
             .input('issueNum', sql.VarChar, issueNumber)
             .input('poId', sql.Int, productionOrderId)
-            .input('issuedBy', sql.VarChar, issuedBy)
+            .input('issuedBy', sql.VarChar, issuedBy || 'System')
             .query(`
                 INSERT INTO mridul.IssualHeader (IssueNumber, ProductionOrderID, IssuedBy)
                 OUTPUT INSERTED.IssueID
@@ -638,7 +1026,7 @@ app.post('/api/issuals', async (req, res) => {
         
         const newIssueId = headerResult.recordset[0].IssueID;
 
-        // Step 3: Loop through the items to insert Details AND deduct Tank stock
+        // Step 3: Loop through the items to insert Details AND deduct Tank stock securely
         for (const item of items) {
             // A. Log the specific item issued
             const detailReq = new sql.Request(transaction);
@@ -652,16 +1040,23 @@ app.post('/api/issuals', async (req, res) => {
                     VALUES (@issueId, @tankId, @productId, @qty)
                 `);
             
-            // B. Subtract the issued quantity from the physical Tank
+            // B. Subtract the issued quantity from the physical Tank with Negative Stock Protection
             const tankReq = new sql.Request(transaction);
-            await tankReq
+            const tankResult = await tankReq
                 .input('tankId', sql.Int, item.tankId)
                 .input('qty', sql.Int, item.quantity)
                 .query(`
                     UPDATE mridul.TankMaster
-                    SET CurrentStock = CurrentStock - @qty
+                    SET CurrentStock = ISNULL(CurrentStock, 0) - @qty
+                    OUTPUT INSERTED.CurrentStock, INSERTED.TankName
                     WHERE TankID = @tankId
                 `);
+            
+            // Safety Check: If the stock drops below zero, abort the entire transaction
+            if (tankResult.recordset.length > 0 && tankResult.recordset[0].CurrentStock < 0) {
+                const tankName = tankResult.recordset[0].TankName;
+                throw new Error(`INSUFFICIENT_STOCK:${tankName}`);
+            }
         }
 
         // Step 4: Update the Production Order status to 'In Progress'
@@ -671,16 +1066,29 @@ app.post('/api/issuals', async (req, res) => {
             .query(`
                 UPDATE mridul.ProductionOrder
                 SET Status = 'In Progress'
-                WHERE ProductionOrderID = @poId
+                WHERE ProductionOrderID = @poId AND Status = 'Pending'
             `);
 
-        await transaction.commit(); // SAVE ALL CHANGES
+        await transaction.commit(); 
         res.status(201).json({ message: 'Materials successfully issued to the floor!', issueNumber });
 
     } catch (err) {
-        await transaction.rollback(); // UNDO IF ANYTHING FAILS (e.g., negative stock error)
-        console.error('Issual Transaction Failed:', err);
-        res.status(500).json({ error: 'Failed to issue materials' });
+        // Safe Rollback Implementation
+        try {
+            await transaction.rollback();
+        } catch (rollbackErr) {
+            console.error('Rollback failed:', rollbackErr);
+        }
+        
+        console.error('Issual Transaction Failed:', err.message || err);
+        
+        // Return a clean, user-friendly error to the React frontend
+        if (err.message && err.message.startsWith('INSUFFICIENT_STOCK')) {
+            const tankName = err.message.split(':')[1];
+            return res.status(400).json({ error: `Insufficient stock in ${tankName}. Please check tank levels.` });
+        }
+        
+        res.status(500).json({ error: 'Failed to issue materials. Server encountered an error.' });
     }
 });
 
@@ -694,7 +1102,7 @@ app.get('/api/issuals', async (req, res) => {
                 i.IssueNumber, 
                 i.IssueDate, 
                 i.IssuedBy, 
-                po.ProductionOrderID AS ProductionRef, -- Corrected column name here
+                po.ProductionOrderID AS ProductionRef,
                 p.ProductName AS TargetProduct, 
                 po.TargetQuantity
             FROM mridul.IssualHeader i
@@ -709,6 +1117,7 @@ app.get('/api/issuals', async (req, res) => {
     }
 });
 
+
 // ==========================================
 // FINISHED GOODS / PRODUCTION COMPLETION
 // ==========================================
@@ -716,63 +1125,85 @@ app.get('/api/issuals', async (req, res) => {
 app.post('/api/finished-goods', async (req, res) => {
     const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
-    if (!productionOrderId || !productId || producedQty == null) {
-        return res.status(400).json({ error: 'Missing required production completion details' });
+    // Enhanced Validation: Prevent negative inputs
+    if (!productionOrderId || !productId || producedQty == null || producedQty <= 0) {
+        return res.status(400).json({ error: 'Valid Production Order, Product, and a positive Produced Quantity are required.' });
+    }
+
+    if (wastageQty != null && wastageQty < 0) {
+        return res.status(400).json({ error: 'Wastage quantity cannot be negative.' });
     }
 
     const pool = await sql.connect(dbConfig);
     const transaction = new sql.Transaction(pool);
 
     try {
-        await transaction.begin(); // START INVENTORY TRANSACTION
+        await transaction.begin(); 
 
-        // 1. Log the Finished Good Receipt
+        // 1. Mark Production Order as Completed FIRST (Double-Entry Protection)
+        const poReq = new sql.Request(transaction);
+        const poResult = await poReq
+            .input('poId', sql.Int, productionOrderId)
+            .query(`
+                UPDATE mridul.ProductionOrder
+                SET Status = 'Completed'
+                WHERE ProductionOrderID = @poId AND Status != 'Completed'
+            `);
+
+        // If rowsAffected is 0, it means the order doesn't exist OR was already completed!
+        if (poResult.rowsAffected[0] === 0) {
+            throw new Error('ALREADY_COMPLETED'); 
+        }
+
+        // 2. Log the Finished Good Receipt
         const receiptReq = new sql.Request(transaction);
         await receiptReq
             .input('poId', sql.Int, productionOrderId)
             .input('productId', sql.Int, productId)
             .input('produced', sql.Int, producedQty)
             .input('wastage', sql.Int, wastageQty || 0)
-            .input('loggedBy', sql.VarChar, loggedBy)
+            .input('loggedBy', sql.VarChar, loggedBy || 'System')
             .query(`
                 INSERT INTO mridul.FinishedGoodsReceipt (ProductionOrderID, ProductID, ProducedQuantity, WastageQuantity, LoggedBy)
                 VALUES (@poId, @productId, @produced, @wastage, @loggedBy)
             `);
 
-        // 2. Increase Product Closing Balance (Finished Goods Inventory)
+        // 3. Increase Product Closing Balance (Finished Goods Inventory)
         const stockReq = new sql.Request(transaction);
         await stockReq
             .input('productId', sql.Int, productId)
             .input('qty', sql.Int, producedQty)
             .query(`
                 UPDATE mridul.ProductMaster
-                SET ClosingBalance = ClosingBalance + @qty
+                SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty
                 WHERE ProductID = @productId
             `);
 
-        // 3. Mark Production Order as Completed
-        const poReq = new sql.Request(transaction);
-        await poReq
-            .input('poId', sql.Int, productionOrderId)
-            .query(`
-                UPDATE mridul.ProductionOrder
-                SET Status = 'Completed'
-                WHERE ProductionOrderID = @poId
-            `);
-
-        await transaction.commit(); // COMMIT ALL CHANGES TO DATABASE
+        await transaction.commit(); 
         res.status(201).json({ message: 'Finished goods logged and inventory updated successfully!' });
 
     } catch (err) {
-        await transaction.rollback(); // UNDO IF ANYTHING FAILS
-        console.error('Finished Goods Transaction Failed:', err);
+        // Safe Rollback
+        try {
+            await transaction.rollback(); 
+        } catch (rollbackErr) {
+            console.error('Rollback failed:', rollbackErr);
+        }
+
+        console.error('Finished Goods Transaction Failed:', err.message || err);
+
+        // Friendly error for the frontend
+        if (err.message === 'ALREADY_COMPLETED') {
+            return res.status(400).json({ error: 'This production order has already been completed.' });
+        }
+
         res.status(500).json({ error: 'Failed to log finished goods' });
     }
 });
 
-// ==========================================
 // SALES ORDER ROUTES
 // ==========================================
+
 // 1. POST: Create a Sales Order (Header + Details Transaction)
 app.post('/api/sales-orders', async (req, res) => {
     const { customerId, items } = req.body; 
@@ -821,7 +1252,12 @@ app.post('/api/sales-orders', async (req, res) => {
         res.status(201).json({ message: 'Sales Order generated successfully!', soNumber });
 
     } catch (err) {
-        await transaction.rollback();
+        // Safe Rollback Implementation
+        try {
+            await transaction.rollback();
+        } catch (rollbackErr) {
+            console.error('Rollback failed:', rollbackErr);
+        }
         console.error('Sales Order Transaction Failed:', err);
         res.status(500).json({ error: 'Failed to generate Sales Order' });
     }
@@ -845,14 +1281,37 @@ app.get('/api/sales-orders', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch Sales Orders' });
     }
 });
- 
+
+// 3. GET: Fetch specific line items for a Sales Order (used for PDF Generation)
+app.get('/api/sales-orders/:id/items', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+        
+        // FIXED: Querying mridul.SalesOrderDetails to match the POST route
+        const result = await pool.request()
+            .input('soId', sql.Int, id)
+            .query(`
+                SELECT 
+                    i.Quantity, 
+                    i.Rate, 
+                    p.ProductName 
+                FROM mridul.SalesOrderDetails i
+                INNER JOIN mridul.ProductMaster p ON i.ProductID = p.ProductID
+                WHERE i.SO_ID = @soId
+            `);
+            
+        res.status(200).json(result.recordset);
+    } catch (err) { 
+        res.status(500).json({ error: 'Failed to fetch sales order items' }); 
+    }
+});
+
 // ==========================================
 // SALES DISPATCH & OUTBOUND ROUTES
 // ==========================================
-
 // 1. POST: Process Outbound Dispatch and Deduct Finished Stock
 app.post('/api/sales-dispatch', async (req, res) => {
-    // We expect the Sales Order ID, truck details, and the items being shipped
     const { soId, vehicleNumber, dispatchedBy, items } = req.body;
 
     if (!soId || !items || items.length === 0) {
@@ -863,9 +1322,8 @@ app.post('/api/sales-dispatch', async (req, res) => {
     const transaction = new sql.Transaction(pool);
 
     try {
-        await transaction.begin(); // START OUTBOUND INVENTORY TRANSACTION
+        await transaction.begin();
 
-        // Step 1: Loop through shipped items to log dispatch and deduct stock
         for (const item of items) {
             // A. Log the dispatch record
             const dispatchReq = new sql.Request(transaction);
@@ -880,19 +1338,25 @@ app.post('/api/sales-dispatch', async (req, res) => {
                     VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
                 `);
 
-            // B. Deduct the shipped quantity from the Product's Closing Balance
+            // B. Deduct Stock WITH a check to prevent negative inventory
             const stockReq = new sql.Request(transaction);
-            await stockReq
+            const stockResult = await stockReq
                 .input('productId', sql.Int, item.productId)
                 .input('qty', sql.Int, item.quantity)
                 .query(`
                     UPDATE mridul.ProductMaster 
                     SET ClosingBalance = ClosingBalance - @qty 
+                    OUTPUT INSERTED.ClosingBalance
                     WHERE ProductID = @productId
                 `);
+
+            // Check if the resulting stock went negative (If DB doesn't have a CHECK constraint)
+            if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
+                throw new Error(`Insufficient stock for Product ID: ${item.productId}`);
+            }
         }
 
-        // Step 2: Mark the Sales Order as Dispatched
+        // C. Mark the Sales Order as Dispatched
         const statusReq = new sql.Request(transaction);
         await statusReq
             .input('soId', sql.Int, soId)
@@ -902,16 +1366,27 @@ app.post('/api/sales-dispatch', async (req, res) => {
                 WHERE SO_ID = @soId
             `);
 
-        await transaction.commit(); // COMMIT ALL CHANGES
+        await transaction.commit(); 
         res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
 
     } catch (err) {
-        await transaction.rollback(); // UNDO IF ANYTHING FAILS (e.g., negative stock error)
-        console.error('Dispatch Transaction Failed:', err);
+        // Safely rollback the transaction if it's active
+        try {
+            await transaction.rollback();
+        } catch (rollbackErr) {
+            console.error('Rollback failed:', rollbackErr);
+        }
+        
+        console.error('Dispatch Transaction Failed:', err.message || err);
+        
+        // Return a friendly error to the frontend if it was a stock issue
+        if (err.message && err.message.includes('Insufficient stock')) {
+            return res.status(400).json({ error: err.message });
+        }
+        
         res.status(500).json({ error: 'Failed to process sales dispatch' });
     }
 });
-
 // 2. GET: Fetch Dispatch History
 app.get('/api/sales-dispatch', async (req, res) => {
     try {
@@ -932,7 +1407,8 @@ app.get('/api/sales-dispatch', async (req, res) => {
     }
 });
 
-const PORT = 5000;
+
+const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+  console.log(`Server is running on port ${PORT}`);
 });

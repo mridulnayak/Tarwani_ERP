@@ -5,7 +5,7 @@ export default function FinishedGoods() {
   
   // Form State
   const [productionOrderId, setProductionOrderId] = useState('');
-  const [productId, setProductId] = useState(''); // Auto-filled when PO is selected
+  const [productId, setProductId] = useState(''); 
   const [producedQty, setProducedQty] = useState('');
   const [wastageQty, setWastageQty] = useState('');
   const [loggedBy, setLoggedBy] = useState('');
@@ -14,7 +14,6 @@ export default function FinishedGoods() {
     try {
       const res = await fetch('http://localhost:5000/api/production-orders');
       const data = await res.json();
-      // Only show orders that have had materials issued and are currently being manufactured
       setInProgressOrders(data.filter(po => po.Status === 'In Progress'));
     } catch (error) {
       console.error("Error fetching production orders:", error);
@@ -23,29 +22,25 @@ export default function FinishedGoods() {
 
   useEffect(() => { fetchInProgressOrders(); }, []);
 
-  // When a user selects a PO, we automatically capture the underlying ProductID
   const handleOrderSelection = (e) => {
     const selectedPoId = e.target.value;
     setProductionOrderId(selectedPoId);
     
     const selectedPo = inProgressOrders.find(po => po.ProductionOrderID.toString() === selectedPoId);
     if (selectedPo) {
-      // In a real app, you might want to fetch the exact ProductID from the backend if it's not in the GET /production-orders payload.
-      // Since our GET route joins with ProductMaster, let's assume we can pass the Product Name for display, 
-      // but we need the actual ProductID for the POST request. 
-      // *Wait*, our GET /api/production-orders doesn't return p.ProductID. 
-      // Let's modify our logic to fetch Products as well so we can look it up, OR you can update the backend GET route later.
-      // For now, let's fetch products to cross-reference the ID.
       fetchProductsAndMatch(selectedPo.ProductName);
     }
   };
 
-  // Helper to get Product ID (A more robust way is to update the SQL GET route to return ProductID)
   const fetchProductsAndMatch = async (productName) => {
+    try {
       const res = await fetch('http://localhost:5000/api/products');
       const products = await res.json();
       const match = products.find(p => p.ProductName === productName);
       if (match) setProductId(match.ProductID);
+    } catch (error) {
+      console.error("Error matching product ID:", error);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -74,7 +69,7 @@ export default function FinishedGoods() {
         setProducedQty('');
         setWastageQty('');
         setLoggedBy('');
-        fetchInProgressOrders(); // Refresh to remove completed orders
+        fetchInProgressOrders(); 
       } else {
         alert("Failed to log finished goods.");
       }
@@ -84,70 +79,82 @@ export default function FinishedGoods() {
   };
 
   return (
-    <div style={{ padding: '1.5rem', backgroundColor: '#1e1e1e', borderRadius: '8px', marginBottom: '2rem', border: '1px solid #333' }}>
-      <h2 style={{ marginTop: 0 }}>Log Finished Goods (Production Completion)</h2>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '2rem' }}>
-        
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: 2, minWidth: '250px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Active Production Order</label>
-            <select 
-              value={productionOrderId} 
-              onChange={handleOrderSelection} 
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }}
+      {/* HEADER */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Log Finished Goods (Production Completion)</h2>
+      </div>
+      
+      {/* FORM SECTION */}
+      <div className="p-5 md:p-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+          
+          {/* Row 1: Active PO & Floor Manager */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-1 md:col-span-2">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Active Production Order</label>
+              <select 
+                value={productionOrderId} 
+                onChange={handleOrderSelection} 
+                className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="" disabled>-- Select 'In Progress' Order --</option>
+                {inProgressOrders.map(po => (
+                  <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
+                    {po.ProductName} | Target: {po.TargetQuantity}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Floor Manager Name</label>
+              <input 
+                type="text" 
+                value={loggedBy} 
+                onChange={(e) => setLoggedBy(e.target.value)} 
+                placeholder="e.g., Ravi" 
+                className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" 
+              />
+            </div>
+          </div>
+
+          {/* Row 2: Quantities */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 border border-gray-200 rounded-xl">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase">Good Units Produced</label>
+              <input 
+                type="number" min="1" 
+                value={producedQty} 
+                onChange={(e) => setProducedQty(e.target.value)} 
+                placeholder="Successful output" 
+                className="w-full p-3 bg-white border border-green-400 text-gray-900 rounded-lg focus:ring-green-500 focus:border-green-500 shadow-sm" 
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-600 uppercase">Wastage / Defective Units</label>
+              <input 
+                type="number" min="0" 
+                value={wastageQty} 
+                onChange={(e) => setWastageQty(e.target.value)} 
+                placeholder="Failed output" 
+                className="w-full p-3 bg-white border border-red-300 text-gray-900 rounded-lg focus:ring-red-500 focus:border-red-500 shadow-sm" 
+              />
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <button 
+              type="submit" 
+              className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-teal-300"
             >
-              <option value="" disabled>-- Select 'In Progress' Order --</option>
-              {inProgressOrders.map(po => (
-                <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
-                  {po.ProductName} | Target: {po.TargetQuantity}
-                </option>
-              ))}
-            </select>
+              Finalize Batch & Update Inventory
+            </button>
           </div>
-
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Floor Manager Name</label>
-            <input 
-              type="text" 
-              value={loggedBy} 
-              onChange={(e) => setLoggedBy(e.target.value)} 
-              placeholder="e.g., Ravi" 
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }} 
-            />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Good Units Produced</label>
-            <input 
-              type="number" 
-              min="1" 
-              value={producedQty} 
-              onChange={(e) => setProducedQty(e.target.value)} 
-              placeholder="Successful output" 
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #28a745' }} 
-            />
-          </div>
-
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Wastage / Defective Units</label>
-            <input 
-              type="number" 
-              min="0" 
-              value={wastageQty} 
-              onChange={(e) => setWastageQty(e.target.value)} 
-              placeholder="Failed output" 
-              style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #dc3545' }} 
-            />
-          </div>
-        </div>
-
-        <button type="submit" style={{ width: '100%', padding: '1rem', backgroundColor: '#20c997', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold' }}>
-          Finalize Batch & Update Inventory
-        </button>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }

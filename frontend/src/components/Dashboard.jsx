@@ -23,76 +23,107 @@ export default function Dashboard({ user }) {
   }, []);
 
   return (
-    <div style={{ padding: '1.5rem', fontFamily: 'Arial, sans-serif' }}>
-      <h2 style={{ color: '#fff', marginTop: 0, marginBottom: '0.5rem', fontSize: '2rem' }}>
-        Welcome back, {user?.username}
-      </h2>
-      <p style={{ color: '#aaa', marginBottom: '2rem', fontSize: '1.1rem' }}>
-        Here is the current operational status of Tarwani Soaps.
-      </p>
+    <div className="w-full">
+      
+      {/* WELCOME HEADER */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-black text-gray-900 tracking-tight">
+          Welcome back, {user?.username}
+        </h2>
+        <p className="text-gray-500 mt-1 text-lg">
+          Here is the current operational status of Tarwani Soaps.
+        </p>
+      </div>
 
-      {/* KPI CARDS (Big, bold numbers) */}
-      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '3rem' }}>
+      {/* KPI CARDS GRID */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         
         {/* Sales Card */}
-        <div style={{ flex: 1, minWidth: '200px', backgroundColor: '#007bff', padding: '2rem', borderRadius: '12px', color: '#fff', textAlign: 'center', boxShadow: '0 4px 12px rgba(0,123,255,0.3)' }}>
-          <h3 style={{ margin: 0, fontSize: '1.2rem', opacity: 0.9 }}>Pending Sales</h3>
-          <div style={{ fontSize: '3.5rem', fontWeight: 'bold', margin: '1rem 0' }}>{stats.pendingSales}</div>
-          <div style={{ fontSize: '0.9rem', backgroundColor: 'rgba(255,255,255,0.2)', padding: '0.5rem', borderRadius: '4px' }}>Orders waiting for dispatch</div>
+        <div className="bg-blue-600 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-blue-700 transition-colors">
+          <h3 className="text-blue-100 font-semibold uppercase tracking-wider text-sm">Pending Sales</h3>
+          <div className="text-5xl font-black my-4">{stats.pendingSales}</div>
+          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Orders waiting for dispatch</div>
         </div>
 
         {/* Production Card */}
-        <div style={{ flex: 1, minWidth: '200px', backgroundColor: '#fd7e14', padding: '2rem', borderRadius: '12px', color: '#fff', textAlign: 'center', boxShadow: '0 4px 12px rgba(253,126,20,0.3)' }}>
-          <h3 style={{ margin: 0, fontSize: '1.2rem', opacity: 0.9 }}>Active Production</h3>
-          <div style={{ fontSize: '3.5rem', fontWeight: 'bold', margin: '1rem 0' }}>{stats.activeProduction}</div>
-          <div style={{ fontSize: '0.9rem', backgroundColor: 'rgba(255,255,255,0.2)', padding: '0.5rem', borderRadius: '4px' }}>Batches on the factory floor</div>
+        <div className="bg-orange-500 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-orange-600 transition-colors">
+          <h3 className="text-orange-100 font-semibold uppercase tracking-wider text-sm">Active Production</h3>
+          <div className="text-5xl font-black my-4">{stats.activeProduction}</div>
+          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Batches on the factory floor</div>
         </div>
 
         {/* Purchase Card */}
-        <div style={{ flex: 1, minWidth: '200px', backgroundColor: '#28a745', padding: '2rem', borderRadius: '12px', color: '#fff', textAlign: 'center', boxShadow: '0 4px 12px rgba(40,167,69,0.3)' }}>
-          <h3 style={{ margin: 0, fontSize: '1.2rem', opacity: 0.9 }}>Pending Purchases</h3>
-          <div style={{ fontSize: '3.5rem', fontWeight: 'bold', margin: '1rem 0' }}>{stats.pendingPurchases}</div>
-          <div style={{ fontSize: '0.9rem', backgroundColor: 'rgba(255,255,255,0.2)', padding: '0.5rem', borderRadius: '4px' }}>Inbound raw material deliveries</div>
+        <div className="bg-green-600 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-green-700 transition-colors">
+          <h3 className="text-green-100 font-semibold uppercase tracking-wider text-sm">Pending Purchases</h3>
+          <div className="text-5xl font-black my-4">{stats.pendingPurchases}</div>
+          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Inbound raw material deliveries</div>
         </div>
 
       </div>
 
       {/* AUTOMATED ALERTS SECTION */}
-      <div style={{ backgroundColor: '#1e1e1e', padding: '1.5rem', borderRadius: '12px', border: '1px solid #333' }}>
-        <h3 style={{ color: '#dc3545', marginTop: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          ⚠️ Critical Low Stock Alerts (Finished Goods)
-        </h3>
-        <p style={{ color: '#aaa', fontSize: '0.9rem', marginBottom: '1.5rem' }}>The following items have 50 or fewer units remaining in the warehouse.</p>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-5 border-b border-gray-200 bg-red-50 flex items-center gap-2">
+          <span className="text-xl">⚠️</span>
+          <div>
+            <h3 className="text-lg font-bold text-red-700 tracking-wide">Critical Low Stock Alerts (Finished Goods)</h3>
+            <p className="text-sm text-red-500">The following items have 50 or fewer units remaining in the warehouse.</p>
+          </div>
+        </div>
         
         {stats.lowStockItems.length > 0 ? (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '1rem' }}>
-            <thead>
-              <tr style={{ backgroundColor: '#2d2d2d' }}>
-                <th style={{ padding: '1rem', borderBottom: '2px solid #444', color: '#fff' }}>Product Name</th>
-                <th style={{ padding: '1rem', borderBottom: '2px solid #444', color: '#fff' }}>Current Balance</th>
-                <th style={{ padding: '1rem', borderBottom: '2px solid #444', color: '#fff' }}>Action Required</th>
-              </tr>
-            </thead>
-            <tbody>
+          <div>
+            {/* MOBILE VIEW: Cards */}
+            <div className="md:hidden divide-y divide-gray-200">
               {stats.lowStockItems.map((item, index) => (
-                <tr key={index} style={{ borderBottom: '1px solid #333' }}>
-                  <td style={{ padding: '1rem', fontWeight: 'bold', color: '#fff' }}>{item.ProductName}</td>
-                  <td style={{ padding: '1rem', color: '#dc3545', fontWeight: 'bold', fontSize: '1.2rem' }}>{item.ClosingBalance}</td>
-                  <td style={{ padding: '1rem' }}>
-                    <button style={{ padding: '0.5rem 1rem', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                      Generate Production Order
+                <div key={index} className="p-4 bg-white">
+                  <div className="font-bold text-gray-900 text-lg mb-1">{item.ProductName}</div>
+                  <div className="flex justify-between items-center mt-3">
+                    <span className="text-sm text-gray-600">
+                      Balance: <span className="font-black text-red-600 text-lg">{item.ClosingBalance}</span>
+                    </span>
+                    <button className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm">
+                      Generate PO
                     </button>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* DESKTOP VIEW: Table */}
+            <div className="hidden md:block w-full overflow-x-auto">
+              <table className="w-full text-left text-sm text-gray-600">
+                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-4 font-semibold">Product Name</th>
+                    <th className="px-6 py-4 font-semibold">Current Balance</th>
+                    <th className="px-6 py-4 font-semibold text-right">Action Required</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {stats.lowStockItems.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50 bg-white">
+                      <td className="px-6 py-4 font-bold text-gray-900 text-base">{item.ProductName}</td>
+                      <td className="px-6 py-4 font-black text-red-600 text-xl">{item.ClosingBalance}</td>
+                      <td className="px-6 py-4 text-right">
+                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">
+                          Generate Production Order
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : (
-          <div style={{ padding: '2rem', textAlign: 'center', backgroundColor: '#2d2d2d', borderRadius: '8px', color: '#28a745', fontWeight: 'bold' }}>
-            ✅ All finished goods are sufficiently stocked. No urgent action required.
+          <div className="p-8 text-center bg-gray-50 text-green-700 font-bold flex flex-col items-center justify-center gap-2">
+            <span className="text-3xl">✅</span>
+            All finished goods are sufficiently stocked. No urgent action required.
           </div>
         )}
       </div>
+
     </div>
   );
 }

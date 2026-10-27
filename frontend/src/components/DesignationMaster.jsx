@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 
-function DesignationMaster() {
+export default function DesignationMaster({ user }) {
   const [designations, setDesignations] = useState([]);
+  
+  // Form State
   const [designationName, setDesignationName] = useState('');
+  
+  // Enterprise Features State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
   const fetchDesignations = async () => {
     try {
@@ -19,121 +25,202 @@ function DesignationMaster() {
 
   const handleDesignationSubmit = async (e) => {
     e.preventDefault();
-
     if (!designationName) return;
 
+    const method = editingId ? 'PUT' : 'POST';
+    const url = editingId 
+      ? `http://localhost:5000/api/designations/${editingId}` 
+      : 'http://localhost:5000/api/designations';
+
     try {
-      const res = await fetch('http://localhost:5000/api/designations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ designationName }),
       });
 
       if (res.ok) {
         setDesignationName('');
+        setEditingId(null);
         fetchDesignations();
+      } else {
+        alert("Failed to save designation.");
       }
     } catch (error) {
       console.error('Error saving designation:', error);
     }
   };
 
+  const handleEdit = (designation) => {
+    setDesignationName(designation.DesignationName);
+    setEditingId(designation.DesignationID);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/designations/${id}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        fetchDesignations();
+      } else {
+        alert("Failed to delete. Designation might be tied to existing employees.");
+      }
+    } catch (error) {
+      console.error("Error deleting designation:", error);
+    }
+  };
+
+  const cancelEdit = () => {
+    setDesignationName('');
+    setEditingId(null);
+  };
+
+  // Filter designations based on search term
+  const filteredDesignations = designations.filter(d => 
+    d.DesignationName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <div
-      style={{
-        padding: '1.5rem',
-        backgroundColor: '#1e1e1e',
-        borderRadius: '8px',
-        marginBottom: '2rem',
-        border: '1px solid #333',
-      }}
-    >
-      <h2>Designation Master</h2>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+      {/* HEADER */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
+          {editingId ? 'Edit Designation' : 'Designation Master'}
+        </h2>
+        {editingId && (
+          <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
+            Editing Mode Active
+          </span>
+        )}
+      </div>
 
-      <form
-        onSubmit={handleDesignationSubmit}
-        style={{
-          display: 'flex',
-          gap: '1rem',
-          marginBottom: '1rem',
-        }}
-      >
-        <input
-          type="text"
-          value={designationName}
-          onChange={(e) => setDesignationName(e.target.value)}
-          placeholder="Designation Name"
-          style={{
-            flex: 1,
-            padding: '0.75rem',
-            backgroundColor: '#2d2d2d',
-            color: '#fff',
-            borderRadius: '4px',
-          }}
-        />
-
-        <button
-          type="submit"
-          style={{
-            padding: '0.75rem 1rem',
-            backgroundColor: '#007bff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-          }}
-        >
-          Save Designation
-        </button>
-      </form>
-
-      <table
-        style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-        }}
-      >
-        <thead>
-          <tr>
-            <th
-              style={{
-                padding: '0.75rem',
-                borderBottom: '1px solid #444',
-                textAlign: 'left',
-              }}
+      {/* FORM SECTION */}
+      <div className="p-5 md:p-6 bg-white">
+        <form onSubmit={handleDesignationSubmit} className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex flex-col gap-1 w-full md:flex-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Designation Name</label>
+            <input
+              type="text"
+              value={designationName}
+              onChange={(e) => setDesignationName(e.target.value)}
+              placeholder="e.g., Factory Manager"
+              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          <div className="w-full md:w-auto flex gap-2">
+            <button
+              type="submit"
+              className={`flex-1 md:w-auto px-8 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300'}`}
             >
-              ID
-            </th>
+              {editingId ? 'Update' : '+ Save'}
+            </button>
+            {editingId && (
+              <button 
+                type="button" 
+                onClick={cancelEdit}
+                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
 
-            <th
-              style={{
-                padding: '0.75rem',
-                borderBottom: '1px solid #444',
-                textAlign: 'left',
-              }}
-            >
-              Designation
-            </th>
-          </tr>
-        </thead>
+      {/* DATA DISPLAY SECTION */}
+      <div className="border-t border-gray-200">
+        
+        {/* GLOBAL SEARCH BAR */}
+        <div className="p-4 bg-gray-50 border-b border-gray-200">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span className="text-gray-400">🔍</span>
+            </div>
+            <input 
+              type="text" 
+              placeholder="Search designations..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
+            />
+          </div>
+        </div>
 
-        <tbody>
-          {designations.map((designation) => (
-            <tr key={designation.DesignationID}>
-              <td style={{ padding: '0.75rem' }}>
-                {designation.DesignationID}
-              </td>
-
-              <td style={{ padding: '0.75rem' }}>
-                {designation.DesignationName}
-              </td>
-            </tr>
+        {/* MOBILE VIEW: Cards */}
+        <div className="md:hidden divide-y divide-gray-200">
+          {filteredDesignations.map((designation) => (
+            <div key={designation.DesignationID} className="p-4 hover:bg-gray-50 transition-colors">
+              <div className="flex justify-between items-start mb-2">
+                <span className="font-bold text-gray-900 text-lg">{designation.DesignationName}</span>
+                <span className="text-xs font-mono text-gray-400">#{designation.DesignationID}</span>
+              </div>
+              
+              {/* Admin Actions Mobile */}
+              {user?.role === 'Admin' && (
+                <div className="flex gap-2 mt-3">
+                  <button onClick={() => handleEdit(designation)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs flex-1">Edit</button>
+                  <button onClick={() => handleDelete(designation.DesignationID)} className="p-1.5 bg-red-100 text-red-700 rounded-md font-bold text-xs flex-1">Delete</button>
+                </div>
+              )}
+            </div>
           ))}
-        </tbody>
-      </table>
+          {filteredDesignations.length === 0 && (
+             <div className="p-6 text-center text-gray-500">No designations found.</div>
+          )}
+        </div>
+
+        {/* DESKTOP VIEW: Table */}
+        <div className="hidden md:block w-full overflow-x-auto">
+          <table className="w-full text-left text-sm text-gray-600">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-4 font-semibold w-24">ID</th>
+                <th className="px-6 py-4 font-semibold">Designation Name</th>
+                {user?.role === 'Admin' && (
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {filteredDesignations.map((designation) => (
+                <tr key={designation.DesignationID} className="hover:bg-gray-50 transition-colors bg-white group">
+                  <td className="px-6 py-4 font-mono text-gray-500">{designation.DesignationID}</td>
+                  <td className="px-6 py-4 font-bold text-gray-900">{designation.DesignationName}</td>
+                  
+                  {/* Admin Actions Desktop */}
+                  {user?.role === 'Admin' && (
+                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(designation)}
+                        className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(designation.DesignationID)}
+                        className="text-red-600 hover:text-red-800 font-semibold transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))}
+              {filteredDesignations.length === 0 && (
+                <tr>
+                  <td colSpan={user?.role === 'Admin' ? 3 : 2} className="px-6 py-8 text-center text-gray-500">
+                    No designations found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
-
-export default DesignationMaster;

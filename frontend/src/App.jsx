@@ -18,9 +18,9 @@ import UserManagement from './components/UserManagement';
 export default function App() {
   const [activeTab, setActiveTab] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedCategory, setExpandedCategory] = useState('Overview');
   const [user, setUser] = useState(null);
 
-  // Check if user is already logged in when the app loads
   useEffect(() => {
     const savedUser = localStorage.getItem('erp_user');
     if (savedUser) {
@@ -41,58 +41,78 @@ export default function App() {
     setUser(null);
   };
 
-  // Auto-route user to their most relevant screen upon login
-const setDefaultTab = (role) => {
-  if (role === 'Admin') setActiveTab('dashboard'); // Updated to dashboard
-  else if (role === 'Sales') setActiveTab('sales');
-  else if (role === 'Store') setActiveTab('purchase');
-  else if (role === 'Production') setActiveTab('production');
-};
+  const setDefaultTab = (role) => {
+    if (role === 'Admin') { setActiveTab('dashboard'); setExpandedCategory('Overview'); }
+    else if (role === 'Sales') { setActiveTab('sales'); setExpandedCategory('Despatch'); }
+    else if (role === 'Store') { setActiveTab('purchase'); setExpandedCategory('Store & Inventory'); }
+    else if (role === 'Production') { setActiveTab('production'); setExpandedCategory('Production'); }
+  };
 
-  // IF NOT LOGGED IN, SHOW LOGIN SCREEN
   if (!user) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // --- ROLE-BASED ACCESS CONTROL (RBAC) ---
-  // Define all possible navigation items, and restrict them by an array of allowed roles
-  const allNavItems = [
-    //dashboard
-    { id: 'dashboard', label: '📊 Dashboard Overview', allowedRoles: ['Admin'] },
-    { id: 'users', label: '👥 User Management', allowedRoles: ['Admin'] },
-    // Core Masters (Admin Only)
-    { id: 'party', label: 'Party Master', allowedRoles: ['Admin'] },
-    { id: 'designation', label: 'Designation Master', allowedRoles: ['Admin'] },
-    { id: 'brand', label: 'Brand Master', allowedRoles: ['Admin'] },
-    { id: 'product', label: 'Product Master', allowedRoles: ['Admin', 'Production'] },
-    { id: 'tank', label: 'Tank Master', allowedRoles: ['Admin', 'Store'] },
-    
-    // Purchase & Store
-    { id: 'purchase', label: 'Purchase Orders', allowedRoles: ['Admin', 'Store'] },
-    { id: 'receiving', label: 'Purchase Receiving', allowedRoles: ['Admin', 'Store'] },
-    { id: 'issual', label: 'Issual Management', allowedRoles: ['Admin', 'Store'] },
-    
-    // Production Floor
-    { id: 'production', label: 'Production Orders', allowedRoles: ['Admin', 'Production'] },
-    { id: 'finished', label: 'Finished Goods Receipt', allowedRoles: ['Admin', 'Production'] },
-    
-    // Sales & Dispatch
-    { id: 'sales', label: 'Sales Orders', allowedRoles: ['Admin', 'Sales'] },
-    { id: 'dispatch', label: 'Sales Dispatch', allowedRoles: ['Admin', 'Sales', 'Store'] },
+  // --- ALIGNED WITH UNCLE's BUSINESS LOGIC ---
+  const menuCategories = [
+    {
+      title: 'Overview',
+      allowedRoles: ['Admin', 'Sales', 'Store', 'Production'],
+      items: [{ id: 'dashboard', label: '📊 Dashboard Overview', roles: ['Admin'] }]
+    },
+    {
+      title: 'Master Management',
+      allowedRoles: ['Admin', 'Production', 'Store'],
+      items: [
+        { id: 'party', label: 'Employee / Party Register', roles: ['Admin'] },
+        { id: 'designation', label: 'Employee Designation', roles: ['Admin'] },
+        { id: 'brand', label: 'Brand Master', roles: ['Admin'] },
+        { id: 'product', label: 'Product / Box Master', roles: ['Admin', 'Production'] },
+        { id: 'tank', label: 'Tank Master', roles: ['Admin', 'Store'] },
+      ]
+    },
+    {
+      title: 'Production',
+      allowedRoles: ['Admin', 'Production'],
+      items: [
+        { id: 'production', label: 'Production Entry', roles: ['Admin', 'Production'] },
+        { id: 'finished', label: 'Finished Goods Receipt', roles: ['Admin', 'Production'] },
+      ]
+    },
+    {
+      title: 'Despatch',
+      allowedRoles: ['Admin', 'Sales', 'Store'],
+      items: [
+        { id: 'sales', label: 'Sales Orders', roles: ['Admin', 'Sales'] },
+        { id: 'dispatch', label: 'Daily Despatch Entry', roles: ['Admin', 'Sales', 'Store'] },
+      ]
+    },
+    {
+      title: 'Store & Inventory',
+      allowedRoles: ['Admin', 'Store'],
+      items: [
+        { id: 'purchase', label: 'Purchase Orders', roles: ['Admin', 'Store'] },
+        { id: 'receiving', label: 'Purchase Receiving', roles: ['Admin', 'Store'] },
+        { id: 'issual', label: 'Physical Stock Issual', roles: ['Admin', 'Store'] },
+      ]
+    },
+    {
+      title: 'Sec Admin',
+      allowedRoles: ['Admin'],
+      items: [
+        { id: 'users', label: 'User Entry / Registration', roles: ['Admin'] }
+      ]
+    }
   ];
-
-  // Filter the sidebar so the worker only sees what they are allowed to see
-  const visibleNavItems = allNavItems.filter(item => item.allowedRoles.includes(user.role));
 
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard user={user} />;
       case 'users': return <UserManagement />;
-      case 'party': return <PartyMaster />;
-      case 'designation': return <DesignationMaster />;
-      case 'brand': return <BrandMaster />;
-      case 'product': return <ProductMaster />;
-      case 'tank': return <TankMaster />;
+      case 'party': return <PartyMaster user={user} />;
+      case 'designation': return <DesignationMaster user={user} />;
+      case 'brand': return <BrandMaster user={user} />;
+      case 'product': return <ProductMaster user={user} />;
+      case 'tank': return <TankMaster user={user} />;
       case 'purchase': return <PurchaseOrder />;
       case 'receiving': return <PurchaseReceiving />;
       case 'production': return <ProductionOrder />;
@@ -101,12 +121,6 @@ const setDefaultTab = (role) => {
       case 'sales': return <SalesOrder />;
       case 'dispatch': return <SalesDispatch />;
       default: return <Dashboard user={user} />;
-      // default: return (
-      //   <div style={{ textAlign: 'center', padding: '3rem', color: '#aaa' }}>
-      //     <h2>Welcome, {user.username}</h2>
-      //     <p>Please select an option from the menu.</p>
-      //   </div>
-      // );
     }
   };
 
@@ -116,40 +130,93 @@ const setDefaultTab = (role) => {
   };
 
   return (
-    <div className="dashboard-container">
-      <aside className="sidebar">
-        <div className="sidebar-header" style={{ paddingBottom: '0.5rem' }}>
-          Tarwani Soaps
-          <div style={{ fontSize: '0.8rem', color: '#007bff', marginTop: '0.5rem' }}>Logged in as: {user.role}</div>
-        </div>
-        
-        <button className="mobile-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>☰ Menu</button>
+    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
+      
+      {/* MOBILE TOP BAR */}
+      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center justify-between px-4 z-50 shadow-md">
+        <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="text-white focus:outline-none text-2xl"
+        >
+          {isMobileMenuOpen ? '✕' : '☰'}
+        </button>
+      </div>
 
-        <nav className={`nav-menu ${isMobileMenuOpen ? 'open' : ''}`}>
-          {visibleNavItems.map((item) => (
-            <button
-              key={item.id}
-              className={`nav-button ${activeTab === item.id ? 'active' : ''}`}
-              onClick={() => handleNavClick(item.id)}
-            >
-              {item.label}
-            </button>
-          ))}
-          
-          {/* LOGOUT BUTTON */}
-          <button 
-            className="nav-button" 
-            onClick={handleLogout}
-            style={{ marginTop: 'auto', borderTop: '1px solid #333', color: '#dc3545', fontWeight: 'bold' }}
-          >
-            ⏻ Logout
-          </button>
+      {/* SIDEBAR (Hidden on mobile unless toggled, fixed on desktop) */}
+      <aside className={`absolute md:relative top-0 left-0 h-full w-72 bg-gray-900 text-gray-300 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
+        ${isMobileMenuOpen ? 'translate-x-0 pt-16' : '-translate-x-full md:translate-x-0'}
+      `}>
+        {/* DESKTOP HEADER */}
+        <div className="hidden md:block p-6 bg-gray-950 border-b border-gray-800 text-center">
+          <h1 className="text-xl font-black text-white tracking-wider uppercase">Tarwani Soaps</h1>
+          <p className="text-xs text-blue-400 mt-2 font-medium">Logged in as: {user.role}</p>
+        </div>
+
+        {/* NAVIGATION ACCORDION */}
+        <nav className="flex-1 overflow-y-auto py-4">
+          {menuCategories.filter(cat => cat.allowedRoles.includes(user.role)).map((category, index) => {
+            const isExpanded = expandedCategory === category.title;
+            const visibleItems = category.items.filter(item => item.roles.includes(user.role));
+            
+            if (visibleItems.length === 0) return null;
+
+            return (
+              <div key={index} className="mb-2">
+                <button 
+                  onClick={() => setExpandedCategory(isExpanded ? '' : category.title)}
+                  className="w-full text-left px-6 py-3 font-semibold text-sm uppercase tracking-widest hover:text-white hover:bg-gray-800 transition-colors flex justify-between items-center"
+                >
+                  {category.title}
+                  <span className="text-gray-500">{isExpanded ? '▼' : '▶'}</span>
+                </button>
+                
+                {isExpanded && (
+                  <div className="bg-gray-950 py-2">
+                    {visibleItems.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => handleNavClick(item.id)}
+                        className={`w-full text-left pl-10 pr-6 py-2.5 text-sm transition-colors
+                          ${activeTab === item.id ? 'bg-blue-600 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-gray-800'}
+                        `}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
+
+        {/* LOGOUT BUTTON */}
+        <div className="p-4 border-t border-gray-800 bg-gray-950">
+          <button 
+            onClick={handleLogout}
+            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-md transition-colors"
+          >
+            Log Out
+          </button>
+        </div>
       </aside>
 
-      <main className="main-content">
-        {renderContent()}
+      {/* MOBILE BACKDROP OVERLAY */}
+      {isMobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        ></div>
+      )}
+
+      {/* MAIN CONTENT AREA */}
+      <main className="flex-1 h-full pt-16 md:pt-0 overflow-y-auto bg-gray-100">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto">
+          {renderContent()}
+        </div>
       </main>
+      
     </div>
   );
 }

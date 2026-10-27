@@ -14,7 +14,6 @@ export default function PurchaseReceiving() {
 
   const fetchData = async () => {
     try {
-      // Fetch only Pending POs
       const poRes = await fetch('http://localhost:5000/api/purchase-orders');
       const poData = await poRes.json();
       setPendingPOs(poData.filter(po => po.Status === 'Pending'));
@@ -57,7 +56,7 @@ export default function PurchaseReceiving() {
         setTankId('');
         setReceivedQty('');
         setReceivedBy('');
-        fetchData(); // Refresh to remove the now-completed PO from the dropdown
+        fetchData(); 
       } else {
         alert("Failed to process receiving.");
       }
@@ -67,16 +66,23 @@ export default function PurchaseReceiving() {
   };
 
   return (
-    <div style={{ padding: '1.5rem', backgroundColor: '#1e1e1e', borderRadius: '8px', marginBottom: '2rem', border: '1px solid #333' }}>
-      <h2 style={{ marginTop: 0 }}>Purchase Receiving & Stock Allocation</h2>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
+      {/* HEADER */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50">
+        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Purchase Receiving & Allocation</h2>
+      </div>
       
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <form onSubmit={handleSubmit} className="p-5 md:p-6">
         
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          {/* PO Dropdown */}
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Link to Purchase Order</label>
-            <select value={poId} onChange={(e) => setPoId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }}>
+        {/* ROW 1: PO & Product Selection */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Link to Purchase Order</label>
+            <select 
+              value={poId} 
+              onChange={(e) => setPoId(e.target.value)} 
+              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            >
               <option value="" disabled>-- Select Pending PO --</option>
               {pendingPOs.map(po => (
                 <option key={po.PO_ID} value={po.PO_ID}>{po.PONumber} ({po.VendorName})</option>
@@ -84,10 +90,13 @@ export default function PurchaseReceiving() {
             </select>
           </div>
 
-          {/* Product Dropdown */}
-          <div style={{ flex: 1, minWidth: '200px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Received Product</label>
-            <select value={productId} onChange={(e) => setProductId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }}>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Received Product</label>
+            <select 
+              value={productId} 
+              onChange={(e) => setProductId(e.target.value)} 
+              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+            >
               <option value="" disabled>-- Select Product --</option>
               {products.map(p => (
                 <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>
@@ -96,11 +105,15 @@ export default function PurchaseReceiving() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-          {/* Destination Tank */}
-          <div style={{ flex: 2, minWidth: '200px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Destination Tank</label>
-            <select value={tankId} onChange={(e) => setTankId(e.target.value)} style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }}>
+        {/* ROW 2: Destination, Quantity, Receiver */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6 bg-gray-50 p-4 border border-gray-200 rounded-xl">
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Destination Tank</label>
+            <select 
+              value={tankId} 
+              onChange={(e) => setTankId(e.target.value)} 
+              className="w-full p-3 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+            >
               <option value="" disabled>-- Select Storage Tank --</option>
               {tanks.map(t => (
                 <option key={t.TankID} value={t.TankID}>{t.TankName} (Current: {t.CurrentStock} | Max: {t.Capacity})</option>
@@ -108,20 +121,33 @@ export default function PurchaseReceiving() {
             </select>
           </div>
 
-          {/* Quantity Input */}
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Quantity Received</label>
-            <input type="number" min="1" value={receivedQty} onChange={(e) => setReceivedQty(e.target.value)} placeholder="e.g., 500" style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }} />
+          <div className="flex flex-col gap-1 md:col-span-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Qty Received</label>
+            <input 
+              type="number" min="1" 
+              value={receivedQty} 
+              onChange={(e) => setReceivedQty(e.target.value)} 
+              placeholder="e.g., 500" 
+              className="w-full p-3 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" 
+            />
           </div>
 
-          {/* Receiver Name */}
-          <div style={{ flex: 1, minWidth: '150px' }}>
-            <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 'bold' }}>Received By</label>
-            <input type="text" value={receivedBy} onChange={(e) => setReceivedBy(e.target.value)} placeholder="Store Admin Name" style={{ width: '100%', padding: '0.75rem', borderRadius: '4px', backgroundColor: '#2d2d2d', color: '#fff', border: '1px solid #444' }} />
+          <div className="flex flex-col gap-1 md:col-span-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Received By</label>
+            <input 
+              type="text" 
+              value={receivedBy} 
+              onChange={(e) => setReceivedBy(e.target.value)} 
+              placeholder="Admin Name" 
+              className="w-full p-3 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" 
+            />
           </div>
         </div>
 
-        <button type="submit" style={{ width: '100%', marginTop: '1rem', padding: '1rem', backgroundColor: '#28a745', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '1.1rem', fontWeight: 'bold' }}>
+        <button 
+          type="submit" 
+          className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-green-300"
+        >
           Confirm Receipt & Update Inventory
         </button>
       </form>

@@ -19,11 +19,8 @@ export default function Login({ onLoginSuccess }) {
       const data = await res.json();
 
       if (res.ok) {
-        // Save the digital ID card (token) and user details to the browser
         localStorage.setItem('erp_token', data.token);
         localStorage.setItem('erp_user', JSON.stringify(data.user));
-        
-        // Tell the main App that login was successful
         onLoginSuccess(data.user);
       } else {
         setError("Incorrect Username or Password. Please try again.");
@@ -34,48 +31,55 @@ export default function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#121212', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ width: '100%', maxWidth: '400px', backgroundColor: '#1e1e1e', padding: '2.5rem', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.5)', border: '1px solid #333' }}>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans p-4">
+      <div className="w-full max-w-md bg-white p-8 md:p-10 rounded-2xl shadow-xl border border-gray-200">
         
-        <h1 style={{ color: '#fff', textAlign: 'center', marginBottom: '0.5rem', fontSize: '2rem' }}>Tarwani Soaps</h1>
-        <p style={{ color: '#aaa', textAlign: 'center', marginBottom: '2rem', fontSize: '1.1rem' }}>Factory Management System</p>
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">Tarwani Soaps</h1>
+          <p className="text-gray-500 font-medium mt-2">Factory Management System</p>
+        </div>
 
         {error && (
-          <div style={{ backgroundColor: '#dc3545', color: '#fff', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem', textAlign: 'center', fontWeight: 'bold' }}>
+          <div className="bg-red-50 text-red-600 border border-red-200 p-4 rounded-lg mb-6 text-center font-semibold text-sm">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div>
-            <label style={{ display: 'block', color: '#ccc', marginBottom: '0.5rem', fontSize: '1.1rem' }}>Username</label>
+        <form onSubmit={handleLogin} className="flex flex-col gap-5">
+          
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Username</label>
             <input 
               type="text" 
               value={username} 
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
-              style={{ width: '100%', padding: '1rem', borderRadius: '8px', backgroundColor: '#2d2d2d', color: '#fff', border: '2px solid #444', fontSize: '1.1rem' }}
+              className="w-full p-3.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 shadow-sm"
               required
             />
           </div>
 
-          <div>
-            <label style={{ display: 'block', color: '#ccc', marginBottom: '0.5rem', fontSize: '1.1rem' }}>Password</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Password</label>
             <input 
               type="password" 
               value={password} 
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
-              style={{ width: '100%', padding: '1rem', borderRadius: '8px', backgroundColor: '#2d2d2d', color: '#fff', border: '2px solid #444', fontSize: '1.1rem' }}
+              className="w-full p-3.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-xl focus:ring-blue-500 focus:border-blue-500 shadow-sm"
               required
             />
           </div>
 
-          <button type="submit" style={{ width: '100%', padding: '1.2rem', backgroundColor: '#007bff', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '1.2rem', fontWeight: 'bold', cursor: 'pointer', marginTop: '1rem' }}>
+          <button 
+            type="submit" 
+            className="w-full mt-2 py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-lg font-bold shadow-md transition-colors focus:outline-none focus:ring-4 focus:ring-blue-300"
+          >
             Secure Login
           </button>
+          
         </form>
-
+        
       </div>
     </div>
   );
