@@ -19,9 +19,9 @@ export default function PartyMaster({ user }) {
 
   const fetchData = async () => {
     try {
-      const pRes = await fetch('http://localhost:5000/api/parties');
+      const pRes = await fetch('/api/parties');
       setParties(await pRes.json());
-      const dRes = await fetch('http://localhost:5000/api/designations');
+      const dRes = await fetch('/api/designations');
       setDesignations(await dRes.json());
     } catch (error) { console.error(error); }
   };
@@ -42,8 +42,8 @@ export default function PartyMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `http://localhost:5000/api/parties/${editingId}` 
-      : 'http://localhost:5000/api/parties';
+      ? `/api/parties/${editingId}` 
+      : '/api/parties';
 
     try {
       const res = await fetch(url, {
@@ -83,7 +83,7 @@ export default function PartyMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this entity? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/parties/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/parties/${id}`, { method: 'DELETE' });
       if (res.ok) {
         fetchData();
       } else {

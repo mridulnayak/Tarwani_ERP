@@ -15,14 +15,14 @@ export default function SalesDispatch() {
 
   const fetchData = async () => {
     try {
-      const soRes = await fetch('http://localhost:5000/api/sales-orders');
+      const soRes = await fetch('/api/sales-orders');
       const soData = await soRes.json();
       setPendingOrders(soData.filter(so => so.Status === 'Pending'));
 
-      const prodRes = await fetch('http://localhost:5000/api/products');
+      const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
 
-      const dispatchRes = await fetch('http://localhost:5000/api/sales-dispatch');
+      const dispatchRes = await fetch('/api/sales-dispatch');
       setDispatchHistory(await dispatchRes.json());
     } catch (error) {
       console.error("Error fetching dispatch data:", error);
@@ -97,7 +97,7 @@ export default function SalesDispatch() {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
-      const res = await fetch('http://localhost:5000/api/sales-dispatch', {
+      const res = await fetch('/api/sales-dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ soId, vehicleNumber, dispatchedBy, items })

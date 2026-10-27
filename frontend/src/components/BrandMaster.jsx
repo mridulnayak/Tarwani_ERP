@@ -12,7 +12,7 @@ export default function BrandMaster({ user }) {
 
   const fetchBrands = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/brands');
+      const res = await fetch('/api/brands');
       setBrands(await res.json());
     } catch (error) {
       console.error("Error fetching brands:", error);
@@ -27,8 +27,8 @@ export default function BrandMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `http://localhost:5000/api/brands/${editingId}` 
-      : 'http://localhost:5000/api/brands';
+      ? `/api/brands/${editingId}` 
+      : '/api/brands';
 
     try {
       const res = await fetch(url, {
@@ -59,7 +59,7 @@ export default function BrandMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this brand? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/brands/${id}`, {
+      const res = await fetch(`/api/brands/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

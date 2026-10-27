@@ -12,7 +12,7 @@ export default function FinishedGoods() {
 
   const fetchInProgressOrders = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/production-orders');
+      const res = await fetch('/api/production-orders');
       const data = await res.json();
       setInProgressOrders(data.filter(po => po.Status === 'In Progress'));
     } catch (error) {
@@ -34,7 +34,7 @@ export default function FinishedGoods() {
 
   const fetchProductsAndMatch = async (productName) => {
     try {
-      const res = await fetch('http://localhost:5000/api/products');
+      const res = await fetch('/api/products');
       const products = await res.json();
       const match = products.find(p => p.ProductName === productName);
       if (match) setProductId(match.ProductID);
@@ -50,7 +50,7 @@ export default function FinishedGoods() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/finished-goods', {
+      const res = await fetch('/api/finished-goods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

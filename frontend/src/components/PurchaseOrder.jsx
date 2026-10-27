@@ -16,14 +16,14 @@ export default function PurchaseOrder({ user }) {
 
   const fetchData = async () => {
     try {
-      const partyRes = await fetch('http://localhost:5000/api/parties');
+      const partyRes = await fetch('/api/parties');
       const partyData = await partyRes.json();
       setVendors(partyData.filter(p => p.PartyType === 'Vendor'));
 
-      const prodRes = await fetch('http://localhost:5000/api/products');
+      const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
 
-      const poRes = await fetch('http://localhost:5000/api/purchase-orders');
+      const poRes = await fetch('/api/purchase-orders');
       setPurchaseOrders(await poRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -43,7 +43,7 @@ export default function PurchaseOrder({ user }) {
   // --- PDF GENERATION LOGIC ---
   const generatePurchaseOrderPDF = async (order) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/purchase-orders/${order.PO_ID}/items`);
+      const res = await fetch(`/api/purchase-orders/${order.PO_ID}/items`);
       const orderItems = res.ok ? await res.json() : [];
 
       const doc = new jsPDF();
@@ -110,7 +110,7 @@ export default function PurchaseOrder({ user }) {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
-      const res = await fetch('http://localhost:5000/api/purchase-orders', {
+      const res = await fetch('/api/purchase-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vendorId, items })

@@ -13,7 +13,7 @@ export default function TankMaster({ user }) {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/tanks');
+      const res = await fetch('/api/tanks');
       setTanks(await res.json());
     } catch (error) {
       console.error(error);
@@ -28,8 +28,8 @@ export default function TankMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `http://localhost:5000/api/tanks/${editingId}` 
-      : 'http://localhost:5000/api/tanks';
+      ? `/api/tanks/${editingId}` 
+      : '/api/tanks';
 
     try {
       const res = await fetch(url, {
@@ -60,7 +60,7 @@ export default function TankMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this tank? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/tanks/${id}`, {
+      const res = await fetch(`/api/tanks/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

@@ -11,10 +11,10 @@ export default function ProductionOrder() {
 
   const fetchData = async () => {
     try {
-      const prodRes = await fetch('http://localhost:5000/api/products');
+      const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
 
-      const poRes = await fetch('http://localhost:5000/api/production-orders');
+      const poRes = await fetch('/api/production-orders');
       setProductionOrders(await poRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -30,7 +30,7 @@ export default function ProductionOrder() {
     }
 
     try {
-      const res = await fetch('http://localhost:5000/api/production-orders', {
+      const res = await fetch('/api/production-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

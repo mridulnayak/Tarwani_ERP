@@ -10,7 +10,7 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/users');
+      const res = await fetch('/api/users');
       if (res.ok) setUsers(await res.json());
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -24,7 +24,7 @@ export default function UserManagement() {
     if (!username || !password || !role) return alert("All fields are required.");
 
     try {
-      const res = await fetch('http://localhost:5000/api/users', {
+      const res = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })
@@ -50,7 +50,7 @@ export default function UserManagement() {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'reactivate'} this account?`)) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/users/${userId}/toggle-status`, {
+      const res = await fetch(`/api/users/${userId}/toggle-status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus }) 

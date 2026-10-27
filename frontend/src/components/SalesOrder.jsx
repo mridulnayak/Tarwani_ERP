@@ -16,14 +16,14 @@ export default function SalesOrder({ user }) {
 
   const fetchData = async () => {
     try {
-      const partyRes = await fetch('http://localhost:5000/api/parties');
+      const partyRes = await fetch('/api/parties');
       const partyData = await partyRes.json();
       setCustomers(partyData.filter(p => p.PartyType === 'Customer'));
 
-      const prodRes = await fetch('http://localhost:5000/api/products');
+      const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
 
-      const soRes = await fetch('http://localhost:5000/api/sales-orders');
+      const soRes = await fetch('/api/sales-orders');
       setSalesOrders(await soRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -45,7 +45,7 @@ export default function SalesOrder({ user }) {
   const generateOrderAcknowledgment = async (order) => {
     try {
       // Fetch the line items for this specific Sales Order from the backend
-      const res = await fetch(`http://localhost:5000/api/sales-orders/${order.SO_ID}/items`);
+      const res = await fetch(`/api/sales-orders/${order.SO_ID}/items`);
       const orderItems = res.ok ? await res.json() : [];
 
       const doc = new jsPDF();
@@ -112,7 +112,7 @@ export default function SalesOrder({ user }) {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
-      const res = await fetch('http://localhost:5000/api/sales-orders', {
+      const res = await fetch('/api/sales-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ customerId, items })

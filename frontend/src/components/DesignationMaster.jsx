@@ -12,7 +12,7 @@ export default function DesignationMaster({ user }) {
 
   const fetchDesignations = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/designations');
+      const res = await fetch('/api/designations');
       setDesignations(await res.json());
     } catch (error) {
       console.error(error);
@@ -29,8 +29,8 @@ export default function DesignationMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `http://localhost:5000/api/designations/${editingId}` 
-      : 'http://localhost:5000/api/designations';
+      ? `/api/designations/${editingId}` 
+      : '/api/designations';
 
     try {
       const res = await fetch(url, {
@@ -61,7 +61,7 @@ export default function DesignationMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/designations/${id}`, {
+      const res = await fetch(`/api/designations/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

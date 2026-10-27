@@ -15,9 +15,9 @@ export default function ProductMaster({ user }) {
 
   const fetchData = async () => {
     try {
-      const pRes = await fetch('http://localhost:5000/api/products');
+      const pRes = await fetch('/api/products');
       setProducts(await pRes.json());
-      const bRes = await fetch('http://localhost:5000/api/brands');
+      const bRes = await fetch('/api/brands');
       setBrands(await bRes.json());
     } catch (error) {
       console.error(error);
@@ -42,8 +42,8 @@ export default function ProductMaster({ user }) {
     // If editingId exists, we do a PUT (Update). Otherwise, POST (Create).
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `http://localhost:5000/api/products/${editingId}` 
-      : 'http://localhost:5000/api/products';
+      ? `/api/products/${editingId}` 
+      : '/api/products';
 
     try {
       const res = await fetch(url, {
@@ -76,7 +76,7 @@ export default function ProductMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this product? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`http://localhost:5000/api/products/${id}`, {
+      const res = await fetch(`/api/products/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
