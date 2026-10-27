@@ -1,3 +1,4 @@
+const path = require('path');
 //auth
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -1408,6 +1409,13 @@ app.get('/api/sales-dispatch', async (req, res) => {
 });
 
 
+
+// Serve the static files from the React build folder
+app.use(express.static(path.join(__dirname, 'dist'))); // Use 'build' instead of 'dist' if you used Create React App
+// Catch-all route: Any request that doesn't match an API route goes to React
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html')); 
+});
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
