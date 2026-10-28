@@ -157,7 +157,7 @@ export default function App() {
         <nav className="flex-1 overflow-y-auto py-4">
           {(menuCategories || []).filter(cat => cat.allowedRoles.includes(user.role)).map((category, index) => {
             const isExpanded = expandedCategory === category.title;
-            const visibleItems = category.(items || []).filter(item => item.roles.includes(user.role));
+            const visibleItems = (category.items || []).filter(item => item.roles.includes(user.role));
             
             if (visibleItems.length === 0) return null;
 
