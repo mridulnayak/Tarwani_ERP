@@ -1425,10 +1425,11 @@ app.get('/api/sales-dispatch', async (req, res) => {
 
 
 // Serve the static files from the React build folder
-app.use(express.static(path.join(__dirname, 'dist'))); // Use 'build' instead of 'dist' if you used Create React App
-// Catch-all route: Any request that doesn't match an API route goes to React
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// 2. Catch-all route to serve index.html for React Router
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html')); 
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
