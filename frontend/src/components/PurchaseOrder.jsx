@@ -9,6 +9,8 @@ export default function PurchaseOrder({ user }) {
 
   // Form State
   const [vendorId, setVendorId] = useState('');
+  // We keep 'rate: 0' in the background state so the backend database doesn't break,
+  // but we won't show it to the user.
   const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
   
   // Enterprise Features
@@ -66,21 +68,21 @@ export default function PurchaseOrder({ user }) {
       doc.text(`Vendor Name: ${order.VendorName}`, 14, 56);
       doc.text(`Status: ${order.Status}`, 14, 63);
 
-      // 3. Items Table
+      // 3. Items Table (Rate and Amount removed as per stakeholder request)
       const tableRows = orderItems.length > 0 
         ? (orderItems || []).map((item, index) => [
             (index + 1).toString(),
             item.ProductName,
-            `${item.Quantity} Units`,
-            `Rs. ${item.Rate.toFixed(2)}`,
-            `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`
+            `${item.Quantity} Units`
+            // `Rs. ${item.Rate.toFixed(2)}`,                    // HIDDEN
+            // `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`   // HIDDEN
           ])
-        : [['-', 'Items pending database sync...', '-', '-', '-']];
+        : [['-', 'Items pending database sync...', '-']];
 
       doc.autoTable({
         startY: 72,
         headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-        head: [['S.No', 'Raw Material Description', 'Quantity', 'Unit Rate', 'Total Amount']],
+        head: [['S.No', 'Raw Material Description', 'Quantity' /*, 'Unit Rate', 'Total Amount'*/]],
         body: tableRows,
         theme: 'grid',
       });
@@ -163,7 +165,9 @@ export default function PurchaseOrder({ user }) {
           
           {(items || []).map((item, index) => (
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
-              <div className="md:col-span-5 flex flex-col gap-1">
+              
+              {/* Increased col-span from 5 to 8 to fill the space left by removing the Rate column */}
+              <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
                 <select 
                   value={item.productId} 
@@ -186,16 +190,18 @@ export default function PurchaseOrder({ user }) {
                 />
               </div>
 
+              {/* RATE COLUMN HIDDEN AS PER STAKEHOLDER REQUEST */}
+              {/* 
               <div className="md:col-span-3 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Purchase Rate (₹)</label>
                 <input 
                   type="number" step="0.01" min="0"
                   value={item.rate} 
                   onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))}
-                  placeholder="Rate (₹)"
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
-              </div>
+              </div> 
+              */}
 
               <div className="md:col-span-1">
                 {items.length > 1 && (

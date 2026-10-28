@@ -13,26 +13,47 @@ export default function SalesDispatch() {
   const [dispatchedBy, setDispatchedBy] = useState('');
   const [items, setItems] = useState([{ productId: '', quantity: 1 }]);
 
+  // NEW: State for the month picker (Format: YYYY-MM)
+  const [selectedMonth, setSelectedMonth] = useState('');
+
   const fetchData = async () => {
     try {
       const soRes = await fetch('/api/sales-orders');
       const soData = await soRes.json();
-       setPendingOrders((soData || []).filter(so => so.Status === 'Pending'));
+      setPendingOrders((soData || []).filter(so => so.Status === 'Pending'));
 
       const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
+      
+      // We removed the automatic dispatch history fetch from here!
+      // It will now only load when the user specifically asks for it.
+    } catch (error) {
+      console.error("Error fetching initial data:", error);
+    }
+  };
 
-      const dispatchRes = await fetch('/api/sales-dispatch');
+  useEffect(() => { fetchData(); }, []);
+
+  // NEW: Function to manually fetch dispatches by month
+  const fetchDispatches = async () => {
+    if (!selectedMonth) {
+      alert("Please select a month and year first.");
+      return;
+    }
+
+    // Split "2026-10" into year and month
+    const [year, month] = selectedMonth.split('-'); 
+    
+    try {
+      const dispatchRes = await fetch(`/api/sales-dispatch?month=${month}&year=${year}`);
       setDispatchHistory(await dispatchRes.json());
     } catch (error) {
       console.error("Error fetching dispatch data:", error);
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
-
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1 }]);
-   const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
+  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
@@ -110,6 +131,9 @@ export default function SalesDispatch() {
         setDispatchedBy('');
         setItems([{ productId: '', quantity: 1 }]);
         fetchData(); 
+        
+        // If they already have a month selected, refresh the list
+        if (selectedMonth) fetchDispatches();
       } else {
         alert("Failed to process dispatch. Check stock levels.");
       }
@@ -235,8 +259,24 @@ export default function SalesDispatch() {
 
       {/* RECENT DISPATCHES TABLE / CARDS */}
       <div className="border-t border-gray-200">
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
+        
+        {/* NEW: Filter Header */}
+        <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
           <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Dispatch Ledger & Documents</h3>
+          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            <input 
+              type="month" 
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="p-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
+            />
+            <button 
+              onClick={fetchDispatches}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
+            >
+              Load Month
+            </button>
+          </div>
         </div>
 
         {/* MOBILE VIEW: Cards */}
@@ -261,7 +301,7 @@ export default function SalesDispatch() {
             </div>
           ))}
           {dispatchHistory.length === 0 && (
-            <div className="p-6 text-center text-gray-500">No dispatch history available.</div>
+            <div className="p-6 text-center text-gray-500 text-sm">Select a month and click 'Load Month' to view records.</div>
           )}
         </div>
 
@@ -297,7 +337,7 @@ export default function SalesDispatch() {
                 </tr>
               ))}
               {dispatchHistory.length === 0 && (
-                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">No dispatch history available.</td></tr>
+                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Select a month and click 'Load Month' to view records.</td></tr>
               )}
             </tbody>
           </table>

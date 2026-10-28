@@ -75,7 +75,7 @@ export default function Dashboard({ user }) {
           <div>
             {/* MOBILE VIEW: Cards */}
             <div className="md:hidden divide-y divide-gray-200">
-              {stats.(lowStockItems || []).map((item, index) => (
+              {(stats.lowStockItems || []).map((item, index) => (
                 <div key={index} className="p-4 bg-white">
                   <div className="font-bold text-gray-900 text-lg mb-1">{item.ProductName}</div>
                   <div className="flex justify-between items-center mt-3">
@@ -101,7 +101,7 @@ export default function Dashboard({ user }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {stats.(lowStockItems || []).map((item, index) => (
+                  {(stats.lowStockItems || []).map((item, index) => (
                     <tr key={index} className="hover:bg-gray-50 bg-white">
                       <td className="px-6 py-4 font-bold text-gray-900 text-base">{item.ProductName}</td>
                       <td className="px-6 py-4 font-black text-red-600 text-xl">{item.ClosingBalance}</td>

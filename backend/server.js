@@ -1388,19 +1388,33 @@ app.post('/api/sales-dispatch', async (req, res) => {
         res.status(500).json({ error: 'Failed to process sales dispatch' });
     }
 });
-// 2. GET: Fetch Dispatch History
+// 2. GET: Fetch Dispatch History (Month-wise)
 app.get('/api/sales-dispatch', async (req, res) => {
     try {
+        const { month, year } = req.query;
+
+        // If no month/year is requested, return an empty array (hidden by default)
+        if (!month || !year) {
+            return res.status(200).json([]);
+        }
+
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query(`
-            SELECT 
-                d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
-                so.SONumber, p.ProductName
-            FROM mridul.SalesDispatch d
-            INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
-            INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
-            ORDER BY d.DispatchDate DESC
-        `);
+        const request = pool.request();
+        
+        const result = await request
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
+                    so.SONumber, p.ProductName
+                FROM mridul.SalesDispatch d
+                INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
+                INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+                WHERE MONTH(d.DispatchDate) = @month AND YEAR(d.DispatchDate) = @year
+                ORDER BY d.DispatchDate DESC
+            `);
+            
         res.status(200).json(result.recordset);
     } catch (err) {
         console.error('Error fetching dispatches:', err);

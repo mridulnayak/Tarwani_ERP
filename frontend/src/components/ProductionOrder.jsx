@@ -1,21 +1,32 @@
 import { useState, useEffect } from 'react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
-export default function ProductionOrder() {
+export default function SalesOrder({ user }) {
+  const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
-  const [productionOrders, setProductionOrders] = useState([]);
+  const [salesOrders, setSalesOrders] = useState([]);
 
   // Form State
-  const [productId, setProductId] = useState('');
-  const [salesOrderRef, setSalesOrderRef] = useState('');
-  const [targetQuantity, setTargetQuantity] = useState('');
+  const [customerId, setCustomerId] = useState('');
+  // We keep 'rate: 0' in the background state so the backend database doesn't break,
+  // but we won't show it to the user.
+  const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
+  
+  // Enterprise Features
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchData = async () => {
     try {
+      const partyRes = await fetch('/api/parties');
+      const partyData = await partyRes.json();
+      setCustomers((partyData || []).filter(p => p.PartyType === 'Customer'));
+
       const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
 
-      const poRes = await fetch('/api/production-orders');
-      setProductionOrders(await poRes.json());
+      const soRes = await fetch('/api/sales-orders');
+      setSalesOrders(await soRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -23,125 +34,257 @@ export default function ProductionOrder() {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!productId || !targetQuantity || targetQuantity <= 0) {
-      return alert("Please select a product and enter a valid target quantity.");
-    }
+  // --- DYNAMIC ROW HANDLERS ---
+  const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
+  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
+  const handleItemChange = (index, field, value) => {
+    const newItems = [...items];
+    newItems[index][field] = value;
+    setItems(newItems);
+  };
 
+  // --- PDF GENERATION LOGIC ---
+  const generateOrderAcknowledgment = async (order) => {
     try {
-      const res = await fetch('/api/production-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          productId, 
-          salesOrderRef, 
-          targetQuantity: parseInt(targetQuantity) 
-        })
+      // Fetch the line items for this specific Sales Order from the backend
+      const res = await fetch(`/api/sales-orders/${order.SO_ID}/items`);
+      const orderItems = res.ok ? await res.json() : [];
+
+      const doc = new jsPDF();
+      
+      // 1. Company Header
+      doc.setFontSize(22);
+      doc.setTextColor(41, 128, 185);
+      doc.text("TARWANI SOAPS", 105, 20, { align: "center" });
+      
+      doc.setFontSize(10);
+      doc.setTextColor(100, 100, 100);
+      doc.text("Sales Order Acknowledgment", 105, 28, { align: "center" });
+      doc.line(14, 32, 196, 32);
+
+      // 2. Order Metadata
+      doc.setFontSize(11);
+      doc.setTextColor(40, 40, 40);
+      doc.text(`Order Date: ${new Date(order.OrderDate).toLocaleDateString()}`, 14, 42);
+      doc.text(`Sales Order No: ${order.SONumber}`, 14, 49);
+      doc.text(`Customer Name: ${order.CustomerName}`, 14, 56);
+      doc.text(`Current Status: ${order.Status}`, 14, 63);
+
+      // 3. Items Table (Rate and Amount removed as per stakeholder request)
+      const tableRows = orderItems.length > 0 
+        ? (orderItems || []).map((item, index) => [
+            (index + 1).toString(),
+            item.ProductName,
+            `${item.Quantity} Units`
+            // `Rs. ${item.Rate.toFixed(2)}`,                    // HIDDEN
+            // `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`   // HIDDEN
+          ])
+        : [['-', 'Items pending database sync...', '-']];
+
+      doc.autoTable({
+        startY: 72,
+        headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
+        head: [['S.No', 'Product Description', 'Quantity' /*, 'Unit Rate', 'Total Amount'*/]],
+        body: tableRows,
+        theme: 'grid',
       });
 
-      if (res.ok) {
-        alert("Production Order Successfully Generated!");
-        setProductId('');
-        setSalesOrderRef('');
-        setTargetQuantity('');
-        fetchData(); 
-      } else {
-        alert("Failed to generate Production Order.");
-      }
+      // 4. Footer
+      const finalY = doc.lastAutoTable.finalY + 30;
+      doc.setFontSize(10);
+      doc.text("Authorized Signatory", 140, finalY);
+      doc.line(130, finalY - 5, 180, finalY - 5);
+
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text("Generated by Tarwani Soaps ERP System", 105, 285, { align: "center" });
+
+      doc.save(`SO_Acknowledgment_${order.SONumber}.pdf`);
     } catch (error) {
-      console.error("Error saving Production Order:", error);
+      console.error("Error generating PDF:", error);
+      alert("Failed to load order items for PDF generation.");
     }
   };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!customerId) return alert("Please select a customer.");
+    
+    const invalidItem = items.find(item => !item.productId || item.quantity <= 0);
+    if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
+
+    try {
+      const res = await fetch('/api/sales-orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId, items })
+      });
+      
+      if (res.ok) {
+        setCustomerId('');
+        setItems([{ productId: '', quantity: 1, rate: 0 }]); 
+        fetchData(); 
+      } else {
+        alert("Failed to generate Sales Order.");
+      }
+    } catch (error) {
+      console.error("Error submitting SO:", error);
+    }
+  };
+
+  // Filter Sales Orders based on search term
+  const filteredOrders = (salesOrders || []).filter(so =>
+    so.SONumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    so.CustomerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    so.Status.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
       {/* HEADER */}
       <div className="p-5 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Production Order</h2>
-        <p className="text-sm text-gray-500 mt-1">Issue manufacturing batches to the factory floor and track target quotas.</p>
+        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Sales Order</h2>
+        <p className="text-sm text-gray-500 mt-1">Record client orders, assign quantities, and track fulfillment status.</p>
       </div>
-
+      
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
-        
-        {/* FORM INPUT GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6">
+        {/* HEADER: Customer Selection */}
+        <div className="mb-6">
+          <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Customer</label>
+          <select 
+            value={customerId} 
+            onChange={(e) => setCustomerId(e.target.value)}
+            className="w-full md:w-1/2 p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+          >
+            <option value="" disabled>-- Select Customer --</option>
+            {(customers || []).map(c => <option key={c.PartyID} value={c.PartyID}>{c.PartyName}</option>)}
+          </select>
+        </div>
+
+        {/* DETAILS: Dynamic Product Rows */}
+        <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
+          <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Order Items</h3>
           
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Select Product to Manufacture</label>
-            <select 
-              value={productId} 
-              onChange={(e) => setProductId(e.target.value)} 
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            >
-              <option value="" disabled>-- Select Product --</option>
-              {(products || []).map(p => (
-                <option key={p.ProductID} value={p.ProductID}>
-                  {p.ProductName} ({p.BrandName}) | Current Stock: {p.ClosingBalance || 0}
-                </option>
-              ))}
-            </select>
-          </div>
+          {(items || []).map((item, index) => (
+            <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
+              
+              {/* Increased col-span from 5 to 8 to fill the space left by removing the Rate column */}
+              <div className="md:col-span-8 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase">Product</label>
+                <select 
+                  value={item.productId} 
+                  onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="" disabled>-- Select Product --</option>
+                  {(products || []).map(p => (
+                    <option key={p.ProductID} value={p.ProductID}>
+                      {p.ProductName} (Stock: {p.ClosingBalance || 0})
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Target Quantity</label>
-            <input 
-              type="number" 
-              min="1" 
-              value={targetQuantity} 
-              onChange={(e) => setTargetQuantity(e.target.value)} 
-              placeholder="e.g., 5000" 
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" 
-            />
-          </div>
+              <div className="md:col-span-3 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase">Quantity</label>
+                <input 
+                  type="number" min="1"
+                  value={item.quantity} 
+                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                  placeholder="Qty"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
 
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Sales Order Ref (Optional)</label>
-            <input 
-              type="text" 
-              value={salesOrderRef} 
-              onChange={(e) => setSalesOrderRef(e.target.value)} 
-              placeholder="e.g., SO-9921" 
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm" 
-            />
-          </div>
+              {/* RATE COLUMN HIDDEN AS PER STAKEHOLDER REQUEST */}
+              {/* 
+              <div className="md:col-span-3 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase">Selling Rate (₹)</label>
+                <input 
+                  type="number" step="0.01" min="0"
+                  value={item.rate} 
+                  onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div> 
+              */}
 
+              <div className="md:col-span-1">
+                {items.length > 1 && (
+                  <button 
+                    type="button" 
+                    onClick={() => handleRemoveItem(index)}
+                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors"
+                  >
+                    X
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          <button 
+            type="button" 
+            onClick={handleAddItem}
+            className="mt-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-sm transition-colors"
+          >
+            + Add Another Item
+          </button>
         </div>
 
         <button 
           type="submit" 
           className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-blue-300"
         >
-          Issue Production Order to Factory Floor
+          Generate Sales Order
         </button>
       </form>
 
-      {/* PRODUCTION ORDERS TABLE / CARDS SECTION */}
+      {/* RECENT SALES ORDERS SECTION */}
       <div className="border-t border-gray-200">
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Active Production Orders Ledger</h3>
+        
+        {/* GLOBAL SEARCH BAR */}
+        <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Recent Sales Orders</h3>
+          <div className="relative w-full md:w-1/3">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+              <span className="text-gray-400">🔍</span>
+            </div>
+            <input 
+              type="text" 
+              placeholder="Search by SO Number or Customer..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 p-2 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
+            />
+          </div>
         </div>
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(productionOrders || []).map((po) => (
-            <div key={po.ProductionOrderID} className="p-4 hover:bg-gray-50 transition-colors">
+          {(filteredOrders || []).map((so) => (
+            <div key={so.SO_ID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">{po.ProductName}</span>
-                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${po.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                  {po.Status}
+                <span className="font-bold text-blue-600">{so.SONumber}</span>
+                <span className={`px-2 py-1 rounded-full text-xs font-bold ${so.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                  {so.Status}
                 </span>
               </div>
-              <div className="text-sm text-gray-600 flex flex-col gap-1">
-                <p>📅 Date: {new Date(po.OrderDate).toLocaleDateString()}</p>
-                <p>🎯 Target Qty: <span className="font-bold text-cyan-600">{po.TargetQuantity}</span></p>
-                <p>📦 Current Stock: {po.ClosingBalance || 0} | SO Ref: {po.SalesOrderRef || 'N/A'}</p>
+              <div className="text-sm text-gray-600 mb-4">
+                <p>👤 Customer: <span className="font-semibold text-gray-800">{so.CustomerName}</span></p>
+                <p>📅 Date: {new Date(so.OrderDate).toLocaleDateString()}</p>
               </div>
+              <button 
+                onClick={() => generateOrderAcknowledgment(so)}
+                className="w-full py-2 bg-gray-800 text-white text-xs font-bold rounded flex items-center justify-center gap-2 hover:bg-gray-900"
+              >
+                <span>🖨️</span> Print Acknowledgment
+              </button>
             </div>
           ))}
-          {productionOrders.length === 0 && (
-            <div className="p-6 text-center text-gray-500">No production orders found.</div>
+          {filteredOrders.length === 0 && (
+            <div className="p-6 text-center text-gray-500">No sales orders found.</div>
           )}
         </div>
 
@@ -150,31 +293,36 @@ export default function ProductionOrder() {
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
               <tr>
+                <th className="px-6 py-4 font-semibold">SO Number</th>
                 <th className="px-6 py-4 font-semibold">Date</th>
-                <th className="px-6 py-4 font-semibold">Product Name</th>
-                <th className="px-6 py-4 font-semibold">Closing Balance</th>
-                <th className="px-6 py-4 font-semibold">Sales Order</th>
-                <th className="px-6 py-4 font-semibold">Target Qty</th>
+                <th className="px-6 py-4 font-semibold">Customer</th>
                 <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold text-right">Document</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(productionOrders || []).map((po) => (
-                <tr key={po.ProductionOrderID} className="hover:bg-gray-50 bg-white">
-                  <td className="px-6 py-4 text-gray-500">{new Date(po.OrderDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900">{po.ProductName}</td>
-                  <td className="px-6 py-4 text-gray-500">{po.ClosingBalance || 0}</td>
-                  <td className="px-6 py-4 text-gray-500">{po.SalesOrderRef || 'N/A'}</td>
-                  <td className="px-6 py-4 font-bold text-cyan-600">{po.TargetQuantity}</td>
+              {(filteredOrders || []).map((so) => (
+                <tr key={so.SO_ID} className="hover:bg-gray-50 bg-white">
+                  <td className="px-6 py-4 font-bold text-blue-600">{so.SONumber}</td>
+                  <td className="px-6 py-4 text-gray-500">{new Date(so.OrderDate).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 font-bold text-gray-900">{so.CustomerName}</td>
                   <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${po.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                      {po.Status}
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${so.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                      {so.Status}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <button 
+                      onClick={() => generateOrderAcknowledgment(so)}
+                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded transition-colors flex items-center gap-1 ml-auto"
+                    >
+                      <span>🖨️</span> PDF
+                    </button>
                   </td>
                 </tr>
               ))}
-              {productionOrders.length === 0 && (
-                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">No production orders found.</td></tr>
+              {filteredOrders.length === 0 && (
+                <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No sales orders found.</td></tr>
               )}
             </tbody>
           </table>

@@ -200,7 +200,7 @@ const filteredOrders = (salesOrders || []).filter(so =>
                   type="number" step="0.01" min="0"
                   value={item.rate} 
                   onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))}
-                  placeholder="Rate (₹)"
+                  /*placeholder="Rate (₹)"*/
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
