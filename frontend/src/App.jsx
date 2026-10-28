@@ -155,9 +155,9 @@ export default function App() {
 
         {/* NAVIGATION ACCORDION */}
         <nav className="flex-1 overflow-y-auto py-4">
-          {menuCategories.filter(cat => cat.allowedRoles.includes(user.role)).map((category, index) => {
+          {(menuCategories || []).filter(cat => cat.allowedRoles.includes(user.role)).map((category, index) => {
             const isExpanded = expandedCategory === category.title;
-            const visibleItems = category.items.filter(item => item.roles.includes(user.role));
+            const visibleItems = category.(items || []).filter(item => item.roles.includes(user.role));
             
             if (visibleItems.length === 0) return null;
 
@@ -173,7 +173,7 @@ export default function App() {
                 
                 {isExpanded && (
                   <div className="bg-gray-950 py-2">
-                    {visibleItems.map(item => (
+                    {(visibleItems || []).map(item => (
                       <button
                         key={item.id}
                         onClick={() => handleNavClick(item.id)}

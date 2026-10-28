@@ -29,7 +29,7 @@ export default function PartyMaster({ user }) {
   useEffect(() => { fetchData(); }, []);
 
   // Format designations for react-select
-  const designationOptions = designations.map(d => ({
+  const designationOptions = (designations || []).map(d => ({
     value: d.DesignationID,
     label: d.DesignationName
   }));
@@ -104,7 +104,7 @@ export default function PartyMaster({ user }) {
     setEditingId(null);
   };
 
-  const filteredParties = parties.filter((p) => {
+  const filteredParties = (parties || []).filter((p) => {
     const searchLower = searchTerm.toLowerCase();
     return (
       p.PartyName.toLowerCase().includes(searchLower) ||
@@ -252,7 +252,7 @@ export default function PartyMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {filteredParties.map((p) => (
+          {(filteredParties || []).map((p) => (
             <div key={p.PartyID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">{p.PartyName}</span>
@@ -299,7 +299,7 @@ export default function PartyMaster({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredParties.map((p) => (
+              {(filteredParties || []).map((p) => (
                 <tr key={p.PartyID} className="hover:bg-gray-50 transition-colors bg-white group">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2.5 py-1 border rounded-full text-xs font-semibold ${getBadgeStyle(p.PartyType)}`}>

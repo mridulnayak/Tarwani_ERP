@@ -15,7 +15,7 @@ export default function IssualManagement() {
     try {
       const poRes = await fetch('/api/production-orders');
       const poData = await poRes.json();
-      setProductionOrders(poData.filter(po => po.Status === 'Pending'));
+      setProductionOrders((poData || []).filter(po => po.Status === 'Pending'));
 
       const tankRes = await fetch('/api/tanks');
       setTanks(await tankRes.json());
@@ -38,8 +38,9 @@ export default function IssualManagement() {
   };
 
   const handleRemoveItem = (index) => {
-    setItems(items.filter((_, i) => i !== index));
+     setItems((items || []).filter((_, i) => i !== index));
   };
+
 
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
@@ -97,7 +98,7 @@ export default function IssualManagement() {
               className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
             >
               <option value="" disabled>-- Select Pending Production Order --</option>
-              {productionOrders.map(po => (
+              {(productionOrders || []).map(po => (
                 <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
                   {po.ProductName} | Target: {po.TargetQuantity} (Date: {new Date(po.OrderDate).toLocaleDateString()})
                 </option>
@@ -121,7 +122,7 @@ export default function IssualManagement() {
         <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
           <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Materials Issued</h3>
           
-          {items.map((item, index) => (
+          {(items || []).map((item, index) => (
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
               
               <div className="md:col-span-5 flex flex-col gap-1">
@@ -132,7 +133,7 @@ export default function IssualManagement() {
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="" disabled>-- Deduct From Tank --</option>
-                  {tanks.map(t => <option key={t.TankID} value={t.TankID}>{t.TankName} (Stock: {t.CurrentStock})</option>)}
+                  {(tanks || []).map(t => <option key={t.TankID} value={t.TankID}>{t.TankName} (Stock: {t.CurrentStock})</option>)}
                 </select>
               </div>
 
@@ -144,7 +145,7 @@ export default function IssualManagement() {
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="" disabled>-- Raw Material --</option>
-                  {products.map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
+                  {(products || []).map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
                 </select>
               </div>
 
@@ -199,7 +200,7 @@ export default function IssualManagement() {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {issuals.map((issue) => (
+          {(issuals || []).map((issue) => (
             <div key={issue.IssueID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-orange-600">{issue.IssueNumber}</span>
@@ -230,7 +231,7 @@ export default function IssualManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {issuals.map((issue) => (
+              {(issuals || []).map((issue) => (
                 <tr key={issue.IssueID} className="hover:bg-gray-50 bg-white">
                   <td className="px-6 py-4 font-bold text-orange-600">{issue.IssueNumber}</td>
                   <td className="px-6 py-4 text-gray-500">{new Date(issue.IssueDate).toLocaleDateString()}</td>

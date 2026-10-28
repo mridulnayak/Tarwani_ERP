@@ -133,7 +133,7 @@ export default function UserManagement() {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {users.map((u) => (
+          {(users || []).map((u) => (
             <div key={u.UserID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">@{u.Username}</span>
@@ -170,7 +170,7 @@ export default function UserManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {users.map((u) => (
+              {(users || []).map((u) => (
                 <tr key={u.UserID} className="hover:bg-gray-50 bg-white">
                   <td className="px-6 py-4 font-bold text-gray-900">@{u.Username}</td>
                   <td className="px-6 py-4">

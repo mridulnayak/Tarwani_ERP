@@ -16,7 +16,7 @@ export default function PurchaseReceiving() {
     try {
       const poRes = await fetch('/api/purchase-orders');
       const poData = await poRes.json();
-      setPendingPOs(poData.filter(po => po.Status === 'Pending'));
+           setPendingPOs((poData || []).filter(po => po.Status === 'Pending'));
 
       const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
@@ -84,7 +84,7 @@ export default function PurchaseReceiving() {
               className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="" disabled>-- Select Pending PO --</option>
-              {pendingPOs.map(po => (
+              {(pendingPOs || []).map(po => (
                 <option key={po.PO_ID} value={po.PO_ID}>{po.PONumber} ({po.VendorName})</option>
               ))}
             </select>
@@ -98,7 +98,7 @@ export default function PurchaseReceiving() {
               className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="" disabled>-- Select Product --</option>
-              {products.map(p => (
+              {(products || []).map(p => (
                 <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>
               ))}
             </select>
@@ -115,7 +115,7 @@ export default function PurchaseReceiving() {
               className="w-full p-3 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
             >
               <option value="" disabled>-- Select Storage Tank --</option>
-              {tanks.map(t => (
+              {(tanks || []).map(t => (
                 <option key={t.TankID} value={t.TankID}>{t.TankName} (Current: {t.CurrentStock} | Max: {t.Capacity})</option>
               ))}
             </select>

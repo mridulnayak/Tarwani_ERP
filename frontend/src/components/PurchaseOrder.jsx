@@ -18,7 +18,7 @@ export default function PurchaseOrder({ user }) {
     try {
       const partyRes = await fetch('/api/parties');
       const partyData = await partyRes.json();
-      setVendors(partyData.filter(p => p.PartyType === 'Vendor'));
+      setVendors((partyData || []).filter(p => p.PartyType === 'Vendor'));
 
       const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
@@ -33,7 +33,7 @@ export default function PurchaseOrder({ user }) {
   useEffect(() => { fetchData(); }, []);
 
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
-  const handleRemoveItem = (index) => setItems(items.filter((_, i) => i !== index));
+  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
@@ -68,7 +68,7 @@ export default function PurchaseOrder({ user }) {
 
       // 3. Items Table
       const tableRows = orderItems.length > 0 
-        ? orderItems.map((item, index) => [
+        ? (orderItems || []).map((item, index) => [
             (index + 1).toString(),
             item.ProductName,
             `${item.Quantity} Units`,
@@ -129,7 +129,7 @@ export default function PurchaseOrder({ user }) {
   };
 
   // Filter Purchase Orders based on search term
-  const filteredOrders = purchaseOrders.filter(po => 
+  const filteredOrders = (purchaseOrders || []).filter(po => 
     po.PONumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     po.VendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     po.Status.toLowerCase().includes(searchTerm.toLowerCase())
@@ -153,7 +153,7 @@ export default function PurchaseOrder({ user }) {
             className="w-full md:w-1/2 p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
           >
             <option value="" disabled>-- Select Vendor --</option>
-            {vendors.map(v => <option key={v.PartyID} value={v.PartyID}>{v.PartyName}</option>)}
+            {(vendors || []).map(v => <option key={v.PartyID} value={v.PartyID}>{v.PartyName}</option>)}
           </select>
         </div>
 
@@ -161,7 +161,7 @@ export default function PurchaseOrder({ user }) {
         <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
           <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Materials Required</h3>
           
-          {items.map((item, index) => (
+          {(items || []).map((item, index) => (
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
               <div className="md:col-span-5 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
@@ -171,7 +171,7 @@ export default function PurchaseOrder({ user }) {
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="" disabled>-- Select Material --</option>
-                  {products.map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
+                  {(products || []).map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
                 </select>
               </div>
 
@@ -249,7 +249,7 @@ export default function PurchaseOrder({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {filteredOrders.map((po) => (
+          {(filteredOrders || []).map((po) => (
             <div key={po.PO_ID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-green-600">{po.PONumber}</span>
@@ -287,7 +287,7 @@ export default function PurchaseOrder({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredOrders.map((po) => (
+              {(filteredOrders || []).map((po) => (
                 <tr key={po.PO_ID} className="hover:bg-gray-50 bg-white">
                   <td className="px-6 py-4 font-bold text-green-600">{po.PONumber}</td>
                   <td className="px-6 py-4 text-gray-500">{new Date(po.OrderDate).toLocaleDateString()}</td>

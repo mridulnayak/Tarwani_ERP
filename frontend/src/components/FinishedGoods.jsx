@@ -14,7 +14,7 @@ export default function FinishedGoods() {
     try {
       const res = await fetch('/api/production-orders');
       const data = await res.json();
-      setInProgressOrders(data.filter(po => po.Status === 'In Progress'));
+      setInProgressOrders((data || []).filter(po => po.Status === 'In Progress'));
     } catch (error) {
       console.error("Error fetching production orders:", error);
     }
@@ -100,7 +100,7 @@ export default function FinishedGoods() {
                 className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="" disabled>-- Select 'In Progress' Order --</option>
-                {inProgressOrders.map(po => (
+                {(inProgressOrders || []).map(po => (
                   <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
                     {po.ProductName} | Target: {po.TargetQuantity}
                   </option>

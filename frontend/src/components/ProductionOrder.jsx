@@ -76,7 +76,7 @@ export default function ProductionOrder() {
               className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
             >
               <option value="" disabled>-- Select Product --</option>
-              {products.map(p => (
+              {(products || []).map(p => (
                 <option key={p.ProductID} value={p.ProductID}>
                   {p.ProductName} ({p.BrandName}) | Current Stock: {p.ClosingBalance || 0}
                 </option>
@@ -125,7 +125,7 @@ export default function ProductionOrder() {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {productionOrders.map((po) => (
+          {(productionOrders || []).map((po) => (
             <div key={po.ProductionOrderID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">{po.ProductName}</span>
@@ -159,7 +159,7 @@ export default function ProductionOrder() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {productionOrders.map((po) => (
+              {(productionOrders || []).map((po) => (
                 <tr key={po.ProductionOrderID} className="hover:bg-gray-50 bg-white">
                   <td className="px-6 py-4 text-gray-500">{new Date(po.OrderDate).toLocaleDateString()}</td>
                   <td className="px-6 py-4 font-bold text-gray-900">{po.ProductName}</td>

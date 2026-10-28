@@ -17,7 +17,7 @@ export default function SalesDispatch() {
     try {
       const soRes = await fetch('/api/sales-orders');
       const soData = await soRes.json();
-      setPendingOrders(soData.filter(so => so.Status === 'Pending'));
+       setPendingOrders((soData || []).filter(so => so.Status === 'Pending'));
 
       const prodRes = await fetch('/api/products');
       setProducts(await prodRes.json());
@@ -32,7 +32,7 @@ export default function SalesDispatch() {
   useEffect(() => { fetchData(); }, []);
 
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1 }]);
-  const handleRemoveItem = (index) => setItems(items.filter((_, i) => i !== index));
+   const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
@@ -139,7 +139,7 @@ export default function SalesDispatch() {
               className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
             >
               <option value="" disabled>-- Select Pending Order --</option>
-              {pendingOrders.map(so => (
+              {(pendingOrders || []).map(so => (
                 <option key={so.SO_ID} value={so.SO_ID}>{so.SONumber} ({so.CustomerName})</option>
               ))}
             </select>
@@ -172,7 +172,7 @@ export default function SalesDispatch() {
         <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
           <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Items Loaded for Delivery</h3>
 
-          {items.map((item, index) => (
+          {(items || []).map((item, index) => (
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
               
               <div className="md:col-span-8 flex flex-col gap-1">
@@ -183,7 +183,7 @@ export default function SalesDispatch() {
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 >
                   <option value="" disabled>-- Select Finished Product --</option>
-                  {products.map(p => (
+                  {(products || []).map(p => (
                     <option key={p.ProductID} value={p.ProductID}>
                       {p.ProductName} (Available Stock: {p.ClosingBalance || 0})
                     </option>
@@ -241,7 +241,7 @@ export default function SalesDispatch() {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {dispatchHistory.map((d) => (
+          {(dispatchHistory || []).map((d) => (
             <div key={d.DispatchID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-blue-600">{d.SONumber}</span>
@@ -279,7 +279,7 @@ export default function SalesDispatch() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {dispatchHistory.map((d) => (
+              {(dispatchHistory || []).map((d) => (
                 <tr key={d.DispatchID} className="hover:bg-gray-50 bg-white">
                   <td className="px-6 py-4 text-gray-500">{new Date(d.DispatchDate).toLocaleDateString()}</td>
                   <td className="px-6 py-4 font-bold text-blue-600">{d.SONumber}</td>

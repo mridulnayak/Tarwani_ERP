@@ -78,7 +78,7 @@ export default function BrandMaster({ user }) {
   };
 
   // Filter brands based on search term
-  const filteredBrands = brands.filter(b => 
+  const filteredBrands = (brands || []).filter(b => 
     b.BrandName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -153,7 +153,7 @@ export default function BrandMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {filteredBrands.map((b) => (
+          {(filteredBrands || []).map((b) => (
             <div key={b.BrandID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">{b.BrandName}</span>
@@ -186,7 +186,7 @@ export default function BrandMaster({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredBrands.map((b) => (
+              {(filteredBrands || []).map((b) => (
                 <tr key={b.BrandID} className="hover:bg-gray-50 transition-colors bg-white group">
                   <td className="px-6 py-4 font-mono text-gray-500">{b.BrandID}</td>
                   <td className="px-6 py-4 font-bold text-gray-900">{b.BrandName}</td>
