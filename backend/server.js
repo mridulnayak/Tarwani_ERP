@@ -1424,12 +1424,15 @@ app.get('/api/sales-dispatch', async (req, res) => {
 
 
 
-// Serve the static files from the React build folder
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
-
+const frontendDistPath = path.join(process.cwd(), 'frontend', 'dist');
+app.use(express.static(frontendDistPath));
 // 2. Catch-all route to serve index.html for React Router
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
+    res.sendFile(path.join(frontendDistPath, 'index.html'), (err) => {
+        if (err) {
+            res.status(404).send('Error: Frontend build (dist folder) not found on server. Make sure you pushed the compiled dist folder to GitHub!');
+        }
+    });
 });
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
