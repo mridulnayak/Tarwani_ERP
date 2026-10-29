@@ -14,20 +14,33 @@ export default function ProductMaster({ user }) {
   const [editingId, setEditingId] = useState(null); // Tracks if we are editing an existing item
 
   const fetchData = async () => {
+    // 1. Fetch Products Safely
     try {
       const pRes = await fetch('/api/products');
-      setProducts(await pRes.json());
-      const bRes = await fetch('/api/brands');
-      setBrands(await bRes.json());
+      if (!pRes.ok) throw new Error(`Products API Error: ${pRes.status}`);
+      const pData = await pRes.json();
+      setProducts(Array.isArray(pData) ? pData : []);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching products:", error);
+      setProducts([]);
+    }
+
+    // 2. Fetch Brands Safely (Independent try/catch block)
+    try {
+      const bRes = await fetch('/api/brands');
+      if (!bRes.ok) throw new Error(`Brands API Error: ${bRes.status}`);
+      const bData = await bRes.json();
+      setBrands(Array.isArray(bData) ? bData : []);
+    } catch (error) {
+      console.error("Error fetching brands:", error);
+      setBrands([]);
     }
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  // Format brands for react-select: { value, label }
-  const brandOptions = (brands || []).map(b => ({
+  // Format brands for react-select: { value, label } (Now perfectly safe)
+  const brandOptions = brands.map(b => ({
     value: b.BrandID,
     label: b.BrandName
   }));
@@ -95,8 +108,8 @@ export default function ProductMaster({ user }) {
     setEditingId(null);
   };
 
-  // Filter products based on search term
-    const filteredProducts = (products || []).filter(p => 
+  // Filter products based on search term (Now perfectly safe)
+  const filteredProducts = products.filter(p => 
     p.ProductName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.BrandName.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -195,7 +208,7 @@ export default function ProductMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(filteredProducts || []).map((p) => (
+          {filteredProducts.map((p) => (
             <div key={p.ProductID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">{p.ProductName}</span>
@@ -234,7 +247,7 @@ export default function ProductMaster({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(filteredProducts || []).map((p) => (
+              {filteredProducts.map((p) => (
                 <tr key={p.ProductID} className="hover:bg-gray-50 transition-colors bg-white group">
                   <td className="px-6 py-4 font-mono text-gray-500">{p.ProductID}</td>
                   <td className="px-6 py-4 font-bold text-gray-900">{p.ProductName}</td>

@@ -13,9 +13,18 @@ export default function DesignationMaster({ user }) {
   const fetchDesignations = async () => {
     try {
       const res = await fetch('/api/designations');
-      setDesignations(await res.json());
+      
+      if (!res.ok) {
+        throw new Error(`Server responded with status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      // SAFETY NET: Ensure data is an array before setting state
+      setDesignations(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching designations:", error);
+      // Fallback to empty array to prevent UI crashes
+      setDesignations([]);
     }
   };
 
@@ -79,8 +88,8 @@ export default function DesignationMaster({ user }) {
     setEditingId(null);
   };
 
-  // Filter designations based on search term
-  const filteredDesignations = (designations || []).filter(d => 
+  // Filter designations based on search term (now perfectly safe)
+  const filteredDesignations = designations.filter(d => 
     d.DesignationName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -152,7 +161,7 @@ export default function DesignationMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(filteredDesignations || []).map((designation) => (
+          {filteredDesignations.map((designation) => (
             <div key={designation.DesignationID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
                 <span className="font-bold text-gray-900 text-lg">{designation.DesignationName}</span>
@@ -186,7 +195,7 @@ export default function DesignationMaster({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(filteredDesignations || []).map((designation) => (
+              {filteredDesignations.map((designation) => (
                 <tr key={designation.DesignationID} className="hover:bg-gray-50 transition-colors bg-white group">
                   <td className="px-6 py-4 font-mono text-gray-500">{designation.DesignationID}</td>
                   <td className="px-6 py-4 font-bold text-gray-900">{designation.DesignationName}</td>

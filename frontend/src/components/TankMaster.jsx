@@ -14,9 +14,15 @@ export default function TankMaster({ user }) {
   const fetchTanks = async () => {
     try {
       const res = await fetch('/api/tanks');
-      setTanks(await res.json());
+      if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+      const data = await res.json();
+      
+      // SAFETY NET: Ensure data is an array before setting state
+      setTanks(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error(error);
+      console.error("Error fetching tanks:", error);
+      // Fallback to empty array to prevent UI crashes
+      setTanks([]);
     }
   };
 
@@ -79,8 +85,8 @@ export default function TankMaster({ user }) {
     setEditingId(null);
   };
 
-  // Filter tanks based on search term
-  const filteredTanks = (tanks || []).filter(t => 
+  // Filter tanks based on search term (now perfectly safe)
+  const filteredTanks = tanks.filter(t => 
     t.TankName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -165,7 +171,7 @@ export default function TankMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(filteredTanks || []).map((t) => (
+          {filteredTanks.map((t) => (
             <div key={t.TankID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-3">
                 <span className="font-bold text-gray-900 text-lg flex items-center gap-2">
@@ -208,7 +214,7 @@ export default function TankMaster({ user }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(filteredTanks || []).map((t) => (
+              {filteredTanks.map((t) => (
                 <tr key={t.TankID} className="hover:bg-gray-50 transition-colors bg-white group">
                   <td className="px-6 py-4 font-mono text-gray-500">{t.TankID}</td>
                   <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">

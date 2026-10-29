@@ -1,136 +1,101 @@
 import { useState, useEffect } from 'react';
-import Select from 'react-select'; // Enterprise searchable dropdown
 
-export default function PartyMaster({ user }) {
-  const [parties, setParties] = useState([]);
-  const [designations, setDesignations] = useState([]);
+export default function TankMaster({ user }) {
+  const [tanks, setTanks] = useState([]);
   
   // Form State
-  const [partyName, setPartyName] = useState('');
-  const [partyType, setPartyType] = useState('Employee'); 
-  const [selectedDesignationId, setSelectedDesignationId] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
-  const [address, setAddress] = useState('');
-  const [gstNumber, setGstNumber] = useState(''); 
+  const [tankName, setTankName] = useState('');
+  const [capacity, setCapacity] = useState('');
   
   // Enterprise Features State
-  const [searchTerm, setSearchTerm] = useState(''); 
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
 
-  const fetchData = async () => {
+  const fetchTanks = async () => {
     try {
-      const pRes = await fetch('/api/parties');
-      setParties(await pRes.json());
-      const dRes = await fetch('/api/designations');
-      setDesignations(await dRes.json());
-    } catch (error) { console.error(error); }
+      const res = await fetch('/api/tanks');
+      if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
+      const data = await res.json();
+      
+      // SAFETY NET: Ensure data is an array before setting state
+      setTanks(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error fetching tanks:", error);
+      // Fallback to empty array to prevent UI crashes
+      setTanks([]);
+    }
   };
 
-  useEffect(() => { fetchData(); }, []);
-
-  // Format designations for react-select
-  const designationOptions = (designations || []).map(d => ({
-    value: d.DesignationID,
-    label: d.DesignationName
-  }));
-  const selectedDesigOption = designationOptions.find(opt => opt.value === selectedDesignationId) || null;
+  useEffect(() => { fetchTanks(); }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!partyName) return alert("Name is required");
-    if (partyType === 'Employee' && !selectedDesignationId) return alert("Select a designation");
+    if (!tankName || !capacity) return;
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `/api/parties/${editingId}` 
-      : '/api/parties';
+      ? `/api/tanks/${editingId}` 
+      : '/api/tanks';
 
     try {
       const res = await fetch(url, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          partyName, 
-          partyType, 
-          designationId: partyType === 'Employee' ? selectedDesignationId : null, 
-          contactNumber: partyType !== 'Employee' ? contactNumber : null, 
-          address: partyType !== 'Employee' ? address : null, 
-          gstNumber: partyType !== 'Employee' ? gstNumber : null 
-        })
+        body: JSON.stringify({ tankName, capacity: parseInt(capacity) })
       });
       
-      if (res.ok) {
-        cancelEdit();
-        fetchData(); 
+      if (res.ok) { 
+        cancelEdit(); 
+        fetchTanks(); 
       } else {
-        alert("Failed to save party.");
+        alert("Failed to save tank.");
       }
-    } catch (error) { console.error("Error saving party:", error); }
+    } catch (error) {
+      console.error("Error saving tank:", error);
+    }
   };
 
-  const handleEdit = (party) => {
-    setPartyName(party.PartyName);
-    setPartyType(party.PartyType);
-    setSelectedDesignationId(party.DesignationID || '');
-    setContactNumber(party.ContactNumber || '');
-    setAddress(party.Address || '');
-    setGstNumber(party.GSTNumber || '');
-    setEditingId(party.PartyID);
+  const handleEdit = (tank) => {
+    setTankName(tank.TankName);
+    setCapacity(tank.Capacity);
+    setEditingId(tank.TankID);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this entity? This action cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to delete this tank? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`/api/parties/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/tanks/${id}`, {
+        method: 'DELETE'
+      });
       if (res.ok) {
-        fetchData();
+        fetchTanks();
       } else {
-        alert("Failed to delete. This party might be tied to existing orders or transactions.");
+        alert("Failed to delete. Tank might be tied to existing inventory records.");
       }
     } catch (error) {
-      console.error("Error deleting party:", error);
+      console.error("Error deleting tank:", error);
     }
   };
 
   const cancelEdit = () => {
-    setPartyName(''); 
-    setPartyType('Employee');
-    setSelectedDesignationId(''); 
-    setContactNumber(''); 
-    setAddress(''); 
-    setGstNumber('');
+    setTankName('');
+    setCapacity('');
     setEditingId(null);
   };
 
-  const filteredParties = (parties || []).filter((p) => {
-    const searchLower = searchTerm.toLowerCase();
-    return (
-      p.PartyName.toLowerCase().includes(searchLower) ||
-      p.PartyType.toLowerCase().includes(searchLower) ||
-      (p.ContactNumber && p.ContactNumber.toLowerCase().includes(searchLower)) ||
-      (p.GSTNumber && p.GSTNumber.toLowerCase().includes(searchLower)) ||
-      (p.DesignationName && p.DesignationName.toLowerCase().includes(searchLower))
-    );
-  });
-
-  const getBadgeStyle = (type) => {
-    switch(type) {
-      case 'Employee': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'Vendor': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'Customer': return 'bg-purple-100 text-purple-800 border-purple-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
+  // Filter tanks based on search term (now perfectly safe)
+  const filteredTanks = tanks.filter(t => 
+    t.TankName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      
       {/* HEADER */}
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
         <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
-          {editingId ? 'Edit Party' : 'Party Master'}
+          {editingId ? 'Edit Tank' : 'Tank Master'}
         </h2>
         {editingId && (
           <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
@@ -138,91 +103,45 @@ export default function PartyMaster({ user }) {
           </span>
         )}
       </div>
-      
+
       {/* FORM SECTION */}
       <div className="p-5 md:p-6 bg-white">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
           
-          {/* Row 1: Type & Name */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase">Party Type</label>
-              <select 
-                value={partyType} 
-                onChange={(e) => {
-                  setPartyType(e.target.value);
-                  if (e.target.value !== 'Employee') setSelectedDesignationId('');
-                }} 
-                disabled={editingId !== null} // Prevent changing type while editing to maintain DB integrity
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
-              >
-                <option value="Employee">Employee</option>
-                <option value="Vendor">Vendor</option>
-                <option value="Customer">Customer</option>
-              </select>
-            </div>
-            
-            <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 uppercase">{partyType} Name</label>
-              <input 
-                type="text" 
-                value={partyName} 
-                onChange={(e) => setPartyName(e.target.value)} 
-                placeholder={`Enter ${partyType} Name...`} 
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
+          <div className="flex flex-col gap-1 md:col-span-2">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Tank Name</label>
+            <input 
+              type="text" 
+              value={tankName} 
+              onChange={(e) => setTankName(e.target.value)} 
+              placeholder="e.g., Silo A" 
+              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+            />
           </div>
 
-          {/* Row 2: Conditional Fields */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {partyType === 'Employee' ? (
-              <div className="flex flex-col gap-1 md:col-span-1">
-                <label className="text-xs font-semibold text-gray-500 uppercase">Designation</label>
-                <Select
-                  options={designationOptions}
-                  value={selectedDesigOption}
-                  onChange={(selected) => setSelectedDesignationId(selected ? selected.value : '')}
-                  isClearable
-                  placeholder="Search designation..."
-                  className="text-gray-900 text-sm"
-                  styles={{
-                    control: (base) => ({
-                      ...base, backgroundColor: '#f9fafb', borderColor: '#d1d5db', padding: '1px', borderRadius: '0.5rem', boxShadow: 'none', '&:hover': { borderColor: '#3b82f6' }
-                    })
-                  }}
-                />
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Contact Number</label>
-                  <input type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="Phone/Mobile" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Address</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full Address" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">GST Number</label>
-                  <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Optional" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-              </>
-            )}
+          <div className="flex flex-col gap-1 md:col-span-1">
+            <label className="text-xs font-semibold text-gray-500 uppercase">Max Capacity (L)</label>
+            <input 
+              type="number" 
+              value={capacity} 
+              onChange={(e) => setCapacity(e.target.value)} 
+              placeholder="e.g., 5000" 
+              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+            />
           </div>
 
-          <div className="pt-2 flex gap-2">
+          <div className="md:col-span-1 flex gap-2">
             <button 
               type="submit" 
-              className={`flex-1 md:w-auto px-8 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-green-600 hover:bg-green-700 focus:ring-green-300'}`}
+              className={`flex-1 px-4 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-300'}`}
             >
-              {editingId ? `Update ${partyType}` : `+ Save ${partyType}`}
+              {editingId ? 'Update' : '+ Save'}
             </button>
             {editingId && (
               <button 
                 type="button" 
                 onClick={cancelEdit}
-                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
+                className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
               >
                 Cancel
               </button>
@@ -234,15 +153,15 @@ export default function PartyMaster({ user }) {
       {/* DATA DISPLAY SECTION */}
       <div className="border-t border-gray-200">
         
-        {/* Search Bar */}
+        {/* GLOBAL SEARCH BAR */}
         <div className="p-4 bg-gray-50 border-b border-gray-200">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <span className="text-gray-500">🔍</span>
+              <span className="text-gray-400">🔍</span>
             </div>
             <input 
               type="text" 
-              placeholder="Search Parties by Name, Type, Role, or GST..." 
+              placeholder="Search tanks..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
@@ -252,38 +171,31 @@ export default function PartyMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(filteredParties || []).map((p) => (
-            <div key={p.PartyID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">{p.PartyName}</span>
-                <span className={`px-2.5 py-0.5 border rounded-full text-xs font-semibold ${getBadgeStyle(p.PartyType)}`}>
-                  {p.PartyType}
+          {filteredTanks.map((t) => (
+            <div key={t.TankID} className="p-4 hover:bg-gray-50 transition-colors">
+              <div className="flex justify-between items-start mb-3">
+                <span className="font-bold text-gray-900 text-lg flex items-center gap-2">
+                  <span>🛢️</span> {t.TankName}
                 </span>
+                <span className="text-xs font-mono text-gray-400">#{t.TankID}</span>
               </div>
-              <div className="text-sm text-gray-600">
-                {p.PartyType === 'Employee' 
-                  ? <p className="flex items-center gap-1"><span>💼</span> Role: <span className="font-semibold text-gray-800">{p.DesignationName}</span></p>
-                  : (
-                    <div className="flex flex-col gap-1 mt-2">
-                      <p className="flex items-center gap-1"><span>📞</span> {p.ContactNumber || 'N/A'}</p>
-                      <p className="flex items-center gap-1">
-                        <span>🏢</span> {p.GSTNumber ? <span className="font-mono text-xs font-semibold text-gray-800">{p.GSTNumber}</span> : 'No GST'}
-                      </p>
-                    </div>
-                  )
-                }
+              <div className="flex justify-between items-center text-sm mb-3">
+                <span className="text-gray-600">Capacity: {t.Capacity} L</span>
+                <span className="px-3 py-1 bg-green-100 text-green-800 font-bold rounded-full border border-green-200">
+                  Stock: {t.CurrentStock} L
+                </span>
               </div>
               {/* Admin Actions Mobile */}
               {user?.role === 'Admin' && (
-                <div className="flex gap-2 mt-4 border-t border-gray-100 pt-3">
-                  <button onClick={() => handleEdit(p)} className="flex-1 p-2 bg-blue-50 text-blue-700 rounded-md font-bold text-xs hover:bg-blue-100 transition-colors">Edit</button>
-                  <button onClick={() => handleDelete(p.PartyID)} className="flex-1 p-2 bg-red-50 text-red-700 rounded-md font-bold text-xs hover:bg-red-100 transition-colors">Delete</button>
+                <div className="flex gap-2 border-t border-gray-100 pt-3">
+                  <button onClick={() => handleEdit(t)} className="flex-1 p-2 bg-blue-50 text-blue-700 rounded-md font-bold text-xs hover:bg-blue-100 transition-colors">Edit</button>
+                  <button onClick={() => handleDelete(t.TankID)} className="flex-1 p-2 bg-red-50 text-red-700 rounded-md font-bold text-xs hover:bg-red-100 transition-colors">Delete</button>
                 </div>
               )}
             </div>
           ))}
-          {filteredParties.length === 0 && (
-             <div className="p-6 text-center text-gray-500">No records found matching your search.</div>
+          {filteredTanks.length === 0 && (
+             <div className="p-6 text-center text-gray-500">No tanks found.</div>
           )}
         </div>
 
@@ -292,39 +204,51 @@ export default function PartyMaster({ user }) {
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4 font-semibold">Type</th>
-                <th className="px-6 py-4 font-semibold">Name</th>
-                <th className="px-6 py-4 font-semibold">Details / GST</th>
-                {user?.role === 'Admin' && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
+                <th className="px-6 py-4 font-semibold w-24">ID</th>
+                <th className="px-6 py-4 font-semibold">Tank Name</th>
+                <th className="px-6 py-4 font-semibold">Max Capacity</th>
+                <th className="px-6 py-4 font-semibold">Current Stock</th>
+                {user?.role === 'Admin' && (
+                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(filteredParties || []).map((p) => (
-                <tr key={p.PartyID} className="hover:bg-gray-50 transition-colors bg-white group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-1 border rounded-full text-xs font-semibold ${getBadgeStyle(p.PartyType)}`}>
-                      {p.PartyType}
-                    </span>
+              {filteredTanks.map((t) => (
+                <tr key={t.TankID} className="hover:bg-gray-50 transition-colors bg-white group">
+                  <td className="px-6 py-4 font-mono text-gray-500">{t.TankID}</td>
+                  <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
+                    <span className="text-gray-400">🛢️</span> {t.TankName}
                   </td>
-                  <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{p.PartyName}</td>
+                  <td className="px-6 py-4">{t.Capacity} L</td>
                   <td className="px-6 py-4">
-                    {p.PartyType === 'Employee' 
-                      ? <span className="font-semibold text-gray-800 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">Role: {p.DesignationName}</span> 
-                      : <span className="text-gray-500">{p.ContactNumber || 'N/A'} <span className="mx-2 text-gray-300">|</span> {p.GSTNumber ? <span className="font-mono font-semibold text-gray-800">GST: {p.GSTNumber}</span> : 'No GST'}</span>}
+                    <span className="font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded-md border border-green-100">
+                      {t.CurrentStock} L
+                    </span>
                   </td>
                   {/* Admin Actions Desktop */}
                   {user?.role === 'Admin' && (
-                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      <button onClick={() => handleEdit(p)} className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors">Edit</button>
-                      <button onClick={() => handleDelete(p.PartyID)} className="text-red-600 hover:text-red-800 font-semibold transition-colors">Delete</button>
+                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => handleEdit(t)}
+                        className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors"
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDelete(t.TankID)}
+                        className="text-red-600 hover:text-red-800 font-semibold transition-colors"
+                      >
+                        Delete
+                      </button>
                     </td>
                   )}
                 </tr>
               ))}
-              {filteredParties.length === 0 && (
+              {filteredTanks.length === 0 && (
                 <tr>
-                  <td colSpan={user?.role === 'Admin' ? 4 : 3} className="px-6 py-8 text-center text-gray-500">
-                    No records found matching your search.
+                  <td colSpan={user?.role === 'Admin' ? 5 : 4} className="px-6 py-8 text-center text-gray-500">
+                    No tanks found matching your search.
                   </td>
                 </tr>
               )}

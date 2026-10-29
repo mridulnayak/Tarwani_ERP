@@ -1,94 +1,104 @@
 import { useState, useEffect } from 'react';
 
-export default function BrandMaster({ user }) {
-  const [brands, setBrands] = useState([]);
+export default function DesignationMaster({ user }) {
+  const [designations, setDesignations] = useState([]);
   
   // Form State
-  const [brandName, setBrandName] = useState('');
+  const [designationName, setDesignationName] = useState('');
   
   // Enterprise Features State
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
 
-  const fetchBrands = async () => {
+  const fetchDesignations = async () => {
     try {
-      const res = await fetch('/api/brands');
-      setBrands(await res.json());
+      const res = await fetch('/api/designations');
+      
+      if (!res.ok) {
+        throw new Error(`Server responded with status: ${res.status}`);
+      }
+
+      const data = await res.json();
+      // SAFETY NET: Ensure data is an array before setting state
+      setDesignations(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error("Error fetching brands:", error);
+      console.error("Error fetching designations:", error);
+      // Fallback to empty array to prevent UI crashes
+      setDesignations([]);
     }
   };
 
-  useEffect(() => { fetchBrands(); }, []);
+  useEffect(() => {
+    fetchDesignations();
+  }, []);
 
-  const handleSubmit = async (e) => {
+  const handleDesignationSubmit = async (e) => {
     e.preventDefault();
-    if (!brandName) return;
+    if (!designationName) return;
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `/api/brands/${editingId}` 
-      : '/api/brands';
+      ? `/api/designations/${editingId}` 
+      : '/api/designations';
 
     try {
       const res = await fetch(url, {
         method: method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ brandName })
+        body: JSON.stringify({ designationName }),
       });
-      
-      if (res.ok) { 
-        setBrandName(''); 
+
+      if (res.ok) {
+        setDesignationName('');
         setEditingId(null);
-        fetchBrands(); 
+        fetchDesignations();
       } else {
-        alert("Failed to save brand.");
+        alert("Failed to save designation.");
       }
     } catch (error) {
-      console.error("Error saving brand:", error);
+      console.error('Error saving designation:', error);
     }
   };
 
-  const handleEdit = (brand) => {
-    setBrandName(brand.BrandName);
-    setEditingId(brand.BrandID);
+  const handleEdit = (designation) => {
+    setDesignationName(designation.DesignationName);
+    setEditingId(designation.DesignationID);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this brand? This action cannot be undone.")) return;
+    if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`/api/brands/${id}`, {
+      const res = await fetch(`/api/designations/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {
-        fetchBrands();
+        fetchDesignations();
       } else {
-        alert("Failed to delete. Brand might be tied to existing products.");
+        alert("Failed to delete. Designation might be tied to existing employees.");
       }
     } catch (error) {
-      console.error("Error deleting brand:", error);
+      console.error("Error deleting designation:", error);
     }
   };
 
   const cancelEdit = () => {
-    setBrandName('');
+    setDesignationName('');
     setEditingId(null);
   };
 
-  // Filter brands based on search term
-  const filteredBrands = (brands || []).filter(b => 
-    b.BrandName.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter designations based on search term (now perfectly safe)
+  const filteredDesignations = designations.filter(d => 
+    d.DesignationName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      
       {/* HEADER */}
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
         <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
-          {editingId ? 'Edit Brand' : 'Brand Master'}
+          {editingId ? 'Edit Designation' : 'Designation Master'}
         </h2>
         {editingId && (
           <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
@@ -99,22 +109,20 @@ export default function BrandMaster({ user }) {
 
       {/* FORM SECTION */}
       <div className="p-5 md:p-6 bg-white">
-        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4 items-end">
-          
+        <form onSubmit={handleDesignationSubmit} className="flex flex-col md:flex-row gap-4 items-end">
           <div className="flex flex-col gap-1 w-full md:flex-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Brand Name</label>
-            <input 
-              type="text" 
-              value={brandName} 
-              onChange={(e) => setBrandName(e.target.value)} 
-              placeholder="e.g., Tarwani Naturals" 
-              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
+            <label className="text-xs font-semibold text-gray-500 uppercase">Designation Name</label>
+            <input
+              type="text"
+              value={designationName}
+              onChange={(e) => setDesignationName(e.target.value)}
+              placeholder="e.g., Factory Manager"
+              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors"
             />
           </div>
-
           <div className="w-full md:w-auto flex gap-2">
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className={`flex-1 md:w-auto px-8 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300'}`}
             >
               {editingId ? 'Update' : '+ Save'}
@@ -143,7 +151,7 @@ export default function BrandMaster({ user }) {
             </div>
             <input 
               type="text" 
-              placeholder="Search brands..." 
+              placeholder="Search designations..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
@@ -153,23 +161,24 @@ export default function BrandMaster({ user }) {
 
         {/* MOBILE VIEW: Cards */}
         <div className="md:hidden divide-y divide-gray-200">
-          {(filteredBrands || []).map((b) => (
-            <div key={b.BrandID} className="p-4 hover:bg-gray-50 transition-colors">
+          {filteredDesignations.map((designation) => (
+            <div key={designation.DesignationID} className="p-4 hover:bg-gray-50 transition-colors">
               <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">{b.BrandName}</span>
-                <span className="text-xs font-mono text-gray-400">#{b.BrandID}</span>
+                <span className="font-bold text-gray-900 text-lg">{designation.DesignationName}</span>
+                <span className="text-xs font-mono text-gray-400">#{designation.DesignationID}</span>
               </div>
+              
               {/* Admin Actions Mobile */}
               {user?.role === 'Admin' && (
                 <div className="flex gap-2 mt-3">
-                  <button onClick={() => handleEdit(b)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs flex-1">Edit</button>
-                  <button onClick={() => handleDelete(b.BrandID)} className="p-1.5 bg-red-100 text-red-700 rounded-md font-bold text-xs flex-1">Delete</button>
+                  <button onClick={() => handleEdit(designation)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs flex-1">Edit</button>
+                  <button onClick={() => handleDelete(designation.DesignationID)} className="p-1.5 bg-red-100 text-red-700 rounded-md font-bold text-xs flex-1">Delete</button>
                 </div>
               )}
             </div>
           ))}
-          {filteredBrands.length === 0 && (
-             <div className="p-6 text-center text-gray-500">No brands found.</div>
+          {filteredDesignations.length === 0 && (
+             <div className="p-6 text-center text-gray-500">No designations found.</div>
           )}
         </div>
 
@@ -179,28 +188,29 @@ export default function BrandMaster({ user }) {
             <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-4 font-semibold w-24">ID</th>
-                <th className="px-6 py-4 font-semibold">Brand Name</th>
+                <th className="px-6 py-4 font-semibold">Designation Name</th>
                 {user?.role === 'Admin' && (
                   <th className="px-6 py-4 font-semibold text-right">Actions</th>
                 )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {(filteredBrands || []).map((b) => (
-                <tr key={b.BrandID} className="hover:bg-gray-50 transition-colors bg-white group">
-                  <td className="px-6 py-4 font-mono text-gray-500">{b.BrandID}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900">{b.BrandName}</td>
+              {filteredDesignations.map((designation) => (
+                <tr key={designation.DesignationID} className="hover:bg-gray-50 transition-colors bg-white group">
+                  <td className="px-6 py-4 font-mono text-gray-500">{designation.DesignationID}</td>
+                  <td className="px-6 py-4 font-bold text-gray-900">{designation.DesignationName}</td>
+                  
                   {/* Admin Actions Desktop */}
                   {user?.role === 'Admin' && (
                     <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
-                        onClick={() => handleEdit(b)}
+                        onClick={() => handleEdit(designation)}
                         className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors"
                       >
                         Edit
                       </button>
                       <button 
-                        onClick={() => handleDelete(b.BrandID)}
+                        onClick={() => handleDelete(designation.DesignationID)}
                         className="text-red-600 hover:text-red-800 font-semibold transition-colors"
                       >
                         Delete
@@ -209,10 +219,10 @@ export default function BrandMaster({ user }) {
                   )}
                 </tr>
               ))}
-              {filteredBrands.length === 0 && (
+              {filteredDesignations.length === 0 && (
                 <tr>
                   <td colSpan={user?.role === 'Admin' ? 3 : 2} className="px-6 py-8 text-center text-gray-500">
-                    No brands found.
+                    No designations found.
                   </td>
                 </tr>
               )}

@@ -1,17 +1,19 @@
 const path = require('path');
-//auth
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-// Secret key for signing tokens (In production, put this in your .env file)
-const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
+// 1. Load environment variables first, with the explicit path
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-require('dotenv').config();
 const express = require('express');
 const sql = require('mssql');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Secret key for signing tokens (It will now correctly read from your .env file)
+const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
 
 // ==========================================
 // AUTHENTICATION ROUTES
