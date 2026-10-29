@@ -8,11 +8,6 @@ frontend/.env
 .env
 .env.*
 
-# Build outputs
-# frontend/dist/
-# frontend/build/
-# frontend/.next/
-# backend/dist/
 
 # Logs
 logs/
