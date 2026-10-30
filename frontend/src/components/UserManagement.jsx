@@ -10,7 +10,7 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('/api/users');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users');
       if (res.ok) setUsers(await res.json());
     } catch (error) {
       console.error("Error fetching users:", error);
@@ -24,7 +24,7 @@ export default function UserManagement() {
     if (!username || !password || !role) return alert("All fields are required.");
 
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })

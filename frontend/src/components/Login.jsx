@@ -10,7 +10,7 @@ export default function Login({ onLoginSuccess }) {
     setError('');
 
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })

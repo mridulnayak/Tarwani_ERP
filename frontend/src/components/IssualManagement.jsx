@@ -13,17 +13,17 @@ export default function IssualManagement() {
 
   const fetchData = async () => {
     try {
-      const poRes = await fetch('/api/production-orders');
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders');
       const poData = await poRes.json();
       setProductionOrders((poData || []).filter(po => po.Status === 'Pending'));
 
-      const tankRes = await fetch('/api/tanks');
+      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
       setTanks(await tankRes.json());
 
-      const prodRes = await fetch('/api/products');
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
       setProducts(await prodRes.json());
 
-      const issueRes = await fetch('/api/issuals');
+      const issueRes = await fetch('https://sms.uvtechsolutions.co.in/api/issuals');
       setIssuals(await issueRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -57,7 +57,7 @@ export default function IssualManagement() {
     if (invalidItem) return alert("Please select a Tank, Product, and valid Quantity for all rows.");
 
     try {
-      const res = await fetch('/api/issuals', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/issuals', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productionOrderId, issuedBy, items })

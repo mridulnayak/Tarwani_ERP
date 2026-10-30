@@ -14,14 +14,14 @@ export default function PurchaseReceiving() {
 
   const fetchData = async () => {
     try {
-      const poRes = await fetch('/api/purchase-orders');
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders');
       const poData = await poRes.json();
            setPendingPOs((poData || []).filter(po => po.Status === 'Pending'));
 
-      const prodRes = await fetch('/api/products');
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
       setProducts(await prodRes.json());
 
-      const tankRes = await fetch('/api/tanks');
+      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
       setTanks(await tankRes.json());
     } catch (error) {
       console.error("Error fetching receiving data:", error);
@@ -37,7 +37,7 @@ export default function PurchaseReceiving() {
     }
 
     try {
-      const res = await fetch('/api/purchase-receiving', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-receiving', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 

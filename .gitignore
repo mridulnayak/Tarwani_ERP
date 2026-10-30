@@ -2,14 +2,16 @@
 backend/node_modules/
 frontend/node_modules/
 
+# Mobile Builds (CRITICAL FOR PLESK SPEED)
+frontend/android/
+frontend/ios/
+
 # Environment files
 backend/.env
 frontend/.env
 .env
 .env.*
 
-
-#
 # Logs
 logs/
 *.log

@@ -13,7 +13,7 @@ export default function TankMaster({ user }) {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch('/api/tanks');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
       if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
       const data = await res.json();
       

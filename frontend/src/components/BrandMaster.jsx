@@ -12,7 +12,7 @@ export default function DesignationMaster({ user }) {
 
   const fetchDesignations = async () => {
     try {
-      const res = await fetch('/api/designations');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/designations');
       
       if (!res.ok) {
         throw new Error(`Server responded with status: ${res.status}`);

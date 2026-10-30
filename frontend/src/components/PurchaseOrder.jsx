@@ -18,14 +18,14 @@ export default function PurchaseOrder({ user }) {
 
   const fetchData = async () => {
     try {
-      const partyRes = await fetch('/api/parties');
+      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties');
       const partyData = await partyRes.json();
       setVendors((partyData || []).filter(p => p.PartyType === 'Vendor'));
 
-      const prodRes = await fetch('/api/products');
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
       setProducts(await prodRes.json());
 
-      const poRes = await fetch('/api/purchase-orders');
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders');
       setPurchaseOrders(await poRes.json());
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -112,7 +112,7 @@ export default function PurchaseOrder({ user }) {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
-      const res = await fetch('/api/purchase-orders', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vendorId, items })

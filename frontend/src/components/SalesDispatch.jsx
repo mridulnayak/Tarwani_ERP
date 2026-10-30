@@ -18,11 +18,11 @@ export default function SalesDispatch() {
 
   const fetchData = async () => {
     try {
-      const soRes = await fetch('/api/sales-orders');
+      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders');
       const soData = await soRes.json();
       setPendingOrders((soData || []).filter(so => so.Status === 'Pending'));
 
-      const prodRes = await fetch('/api/products');
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
       setProducts(await prodRes.json());
       
       // We removed the automatic dispatch history fetch from here!
@@ -118,7 +118,7 @@ export default function SalesDispatch() {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
-      const res = await fetch('/api/sales-dispatch', {
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ soId, vehicleNumber, dispatchedBy, items })
