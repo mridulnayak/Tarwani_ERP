@@ -1,5 +1,4 @@
 const path = require('path');
-// 1. Load environment variables first, with the explicit path
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
@@ -12,14 +11,30 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Secret key for signing tokens (It will now correctly read from your .env file)
+// 1. DEFINE DB CONFIG IMMEDIATELY
+const dbConfig = {
+  // Agar .env fail ho jaye, toh yeh directly in values ko use kar lega
+  user: process.env.DB_USER || 'mridul',
+  password: process.env.DB_PASSWORD || 'Thakur@007',
+  server: process.env.DB_SERVER || '208.91.199.99',
+  database: process.env.DB_NAME || 'uvtecgxh_sms',
+  options: {
+    encrypt: false, 
+    trustServerCertificate: true
+  }
+};
+
+// 2. TEST CONNECTION ON STARTUP
+sql.connect(dbConfig).then(() => {
+  console.log('Connected to MSSQL Database: uvtecgxh_sms successfully!');
+}).catch(err => {
+  console.error('CRITICAL: Database connection failed on startup:', err.message);
+});
+
 const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
 
 // ==========================================
 // AUTHENTICATION ROUTES
-// ==========================================
-// ==========================================
-// AUTHENTICATION ROUTES (This was missing)
 // ==========================================
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
@@ -159,27 +174,12 @@ app.get('/api/dashboard-stats', async (req, res) => {
         });
     } catch (err) {
         console.error('Error fetching dashboard stats:', err);
-        res.status(500).json({ error: 'Failed to load dashboard statistics' });
+        // EXPOSING THE REAL ERROR:
+        res.status(500).json({ 
+            error: 'Failed to load dashboard statistics', 
+            sqlError: err.message // This will reveal if it's a login, network, or query issue
+        });
     }
-});
-
-// SQL Server configuration
-const dbConfig = {
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  server: process.env.DB_SERVER,
-  database: process.env.DB_NAME,
-  options: {
-    encrypt: false, 
-    trustServerCertificate: true // Necessary for this specific IP connection
-  }
-};
-
-// Test the database connection
-sql.connect(dbConfig).then(() => {
-  console.log('Connected to MSSQL Database: uvtecgxh_sms successfully!');
-}).catch(err => {
-  console.error('Database connection failed:', err);
 });
 
 
@@ -260,117 +260,6 @@ app.delete('/api/designations/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete designation. Ensure no employees are assigned to this role first.' }); 
     }
 });
-
-// // ==========================================
-// // UNIFIED PARTY MASTER ROUTES
-// // ==========================================
-
-// // 1. POST: Create a new Party (Employee, Vendor, or Customer)
-// app.post('/api/parties', async (req, res) => {
-//     try {
-//         const { partyName, partyType, designationId, contactNumber, address } = req.body; 
-        
-//         if (!partyName || !partyType) {
-//             return res.status(400).json({ error: 'Party Name and Type are required' });
-//         }
-
-//         const pool = await sql.connect(dbConfig);
-//         await pool.request()
-//             .input('name', sql.VarChar, partyName) 
-//             .input('type', sql.VarChar, partyType) 
-//             // If it's an Employee, save the Designation. Otherwise, save NULL.
-//             .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null) 
-//             // If it's NOT an Employee, save Contact/Address. Otherwise, save NULL.
-//             .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
-//             .input('address', sql.Text, partyType !== 'Employee' ? address : null)
-//             .query(`
-//                 INSERT INTO mridul.PartyMaster (PartyName, PartyType, DesignationID, ContactNumber, Address) 
-//                 VALUES (@name, @type, @desigId, @contact, @address)
-//             `);
-
-//         res.status(201).json({ message: `${partyType} created successfully!` });
-//     } catch (err) {
-//         console.error('Error creating party:', err);
-//         res.status(500).json({ error: 'Failed to create party record' });
-//     }
-// });
-
-// // 2. GET: Fetch all Parties
-// app.get('/api/parties', async (req, res) => {
-//     try {
-//         const pool = await sql.connect(dbConfig);
-//         // LEFT JOIN ensures we get ALL parties, even if they don't have a Designation
-//         const result = await pool.request().query(`
-//             SELECT 
-//                 p.PartyID, 
-//                 p.PartyName, 
-//                 p.PartyType, 
-//                 p.ContactNumber,
-//                 p.Address,
-//                 d.DesignationName 
-//             FROM mridul.PartyMaster p
-//             LEFT JOIN mridul.DesignationMaster d ON p.DesignationID = d.DesignationID
-//             ORDER BY p.PartyType, p.PartyName
-//         `);
-        
-//         res.status(200).json(result.recordset); 
-//     } catch (err) {
-//         console.error('Error fetching parties:', err);
-//         res.status(500).json({ error: 'Failed to fetch parties' });
-//     }
-// });
-
-// // Update an existing party (EDIT)
-// app.put('/api/parties/:id', async (req, res) => {
-//     try {
-//         const { id } = req.params;
-//         const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body;
-        
-//         if (!partyName) return res.status(400).json({ error: 'Party Name is required' });
-
-//         const pool = await sql.connect(dbConfig);
-//         const result = await pool.request()
-//             .input('id', sql.Int, id)
-//             .input('partyName', sql.VarChar, partyName)
-//             .input('partyType', sql.VarChar, partyType)
-//             .input('designationId', sql.Int, designationId || null)
-//             .input('contactNumber', sql.VarChar, contactNumber || null)
-//             .input('address', sql.VarChar, address || null)
-//             .input('gstNumber', sql.VarChar, gstNumber || null)
-//             .query(`
-//                 UPDATE mridul.PartyMaster 
-//                 SET PartyName = @partyName, 
-//                     PartyType = @partyType, 
-//                     DesignationID = @designationId, 
-//                     ContactNumber = @contactNumber, 
-//                     Address = @address, 
-//                     GSTNumber = @gstNumber
-//                 WHERE PartyID = @id
-//             `);
-        
-//         if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Party not found' });
-//         res.status(200).json({ message: 'Party updated successfully!' });
-//     } catch (err) { 
-//         res.status(500).json({ error: 'Failed to update party' }); 
-//     }
-// });
-
-// // Delete a party (DELETE)
-// app.delete('/api/parties/:id', async (req, res) => {
-//     try {
-//         const { id } = req.params;
-
-//         const pool = await sql.connect(dbConfig);
-//         const result = await pool.request()
-//             .input('id', sql.Int, id)
-//             .query('DELETE FROM mridul.PartyMaster WHERE PartyID = @id');
-        
-//         if (result.rowsAffected[0] === 0) return res.status(404).json({ error: 'Party not found' });
-//         res.status(200).json({ message: 'Party deleted successfully!' });
-//     } catch (err) { 
-//         res.status(500).json({ error: 'Failed to delete party. It is likely tied to existing orders.' }); 
-//     }
-// });
 
 // ==========================================
 // BRAND MASTER ROUTES
@@ -1426,17 +1315,21 @@ app.get('/api/sales-dispatch', async (req, res) => {
 
 
 
-const frontendDistPath = path.join(process.cwd(), 'frontend', 'dist');
+// --- SERVE STATIC FRONTEND ASSETS ---
+const frontendDistPath = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDistPath));
-// 2. Catch-all route to serve index.html for React Router
+
+// --- REACT ROUTER CATCH-ALL ---
 app.get('*', (req, res) => {
     res.sendFile(path.join(frontendDistPath, 'index.html'), (err) => {
         if (err) {
-            res.status(404).send('Error: Frontend build (dist folder) not found on server. Make sure you pushed the compiled dist folder to GitHub!');
+            // NAYA ERROR MESSAGE
+            res.status(500).send(`Path Error: Server is looking for frontend at -> ${frontendDistPath}`);
         }
     });
 });
+
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running smoothly on port ${PORT}`);
 });
