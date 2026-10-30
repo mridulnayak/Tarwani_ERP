@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function SalesOrder({ user }) {
   const [customers, setCustomers] = useState([]);
@@ -43,11 +43,11 @@ export default function SalesOrder({ user }) {
     setItems(newItems);
   };
 
-  // --- PDF GENERATION LOGIC ---
+// --- PDF GENERATION LOGIC ---
   const generateOrderAcknowledgment = async (order) => {
     try {
-      // Fetch the line items for this specific Sales Order from the backend
-      const res = await fetch(`/api/sales-orders/${order.SO_ID}/items`);
+      // UPDATED TO ABSOLUTE URL FOR MOBILE APK
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${order.SO_ID}/items`);
       const orderItems = res.ok ? await res.json() : [];
 
       const doc = new jsPDF();
@@ -70,21 +70,20 @@ export default function SalesOrder({ user }) {
       doc.text(`Customer Name: ${order.CustomerName}`, 14, 56);
       doc.text(`Current Status: ${order.Status}`, 14, 63);
 
-      // 3. Items Table (Rate and Amount removed as per stakeholder request)
+      // 3. Items Table 
       const tableRows = orderItems.length > 0 
         ? (orderItems || []).map((item, index) => [
             (index + 1).toString(),
             item.ProductName,
             `${item.Quantity} Units`
-            // `Rs. ${item.Rate.toFixed(2)}`,                    // HIDDEN
-            // `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`   // HIDDEN
           ])
         : [['-', 'Items pending database sync...', '-']];
 
-      doc.autoTable({
+      // UPDATED TO STANDALONE FUNCTION
+      autoTable(doc, {
         startY: 72,
         headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-        head: [['S.No', 'Product Description', 'Quantity' /*, 'Unit Rate', 'Total Amount'*/]],
+        head: [['S.No', 'Product Description', 'Quantity']],
         body: tableRows,
         theme: 'grid',
       });

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function SalesDispatch() {
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -60,7 +60,7 @@ export default function SalesDispatch() {
     setItems(newItems);
   };
 
-  // --- PDF GENERATION LOGIC ---
+// --- PDF GENERATION LOGIC ---
   const generateInvoice = (dispatchRecord) => {
     const doc = new jsPDF();
     
@@ -82,8 +82,8 @@ export default function SalesDispatch() {
     doc.text(`Vehicle Number: ${dispatchRecord.VehicleNumber || 'N/A'}`, 14, 56);
     doc.text(`Authorized Dispatcher: ${dispatchRecord.DispatchedBy}`, 14, 63);
 
-    // 3. Items Table
-    doc.autoTable({
+    // 3. Items Table (UPDATED TO STANDALONE FUNCTION FOR VITE/CAPACITOR)
+    autoTable(doc, {
       startY: 72,
       headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
       head: [['S.No', 'Finished Product Description', 'Dispatched Qty']],

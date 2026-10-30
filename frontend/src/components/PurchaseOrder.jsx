@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function PurchaseOrder({ user }) {
   const [vendors, setVendors] = useState([]);
@@ -42,10 +42,11 @@ export default function PurchaseOrder({ user }) {
     setItems(newItems);
   };
 
-  // --- PDF GENERATION LOGIC ---
+// --- PDF GENERATION LOGIC ---
   const generatePurchaseOrderPDF = async (order) => {
     try {
-      const res = await fetch(`/api/purchase-orders/${order.PO_ID}/items`);
+      // UPDATED TO ABSOLUTE URL FOR MOBILE APK
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/purchase-orders/${order.PO_ID}/items`);
       const orderItems = res.ok ? await res.json() : [];
 
       const doc = new jsPDF();
@@ -74,15 +75,14 @@ export default function PurchaseOrder({ user }) {
             (index + 1).toString(),
             item.ProductName,
             `${item.Quantity} Units`
-            // `Rs. ${item.Rate.toFixed(2)}`,                    // HIDDEN
-            // `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`   // HIDDEN
           ])
         : [['-', 'Items pending database sync...', '-']];
 
-      doc.autoTable({
+      // UPDATED TO STANDALONE FUNCTION
+      autoTable(doc, {
         startY: 72,
         headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-        head: [['S.No', 'Raw Material Description', 'Quantity' /*, 'Unit Rate', 'Total Amount'*/]],
+        head: [['S.No', 'Raw Material Description', 'Quantity']],
         body: tableRows,
         theme: 'grid',
       });
