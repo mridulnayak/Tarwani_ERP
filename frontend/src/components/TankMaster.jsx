@@ -38,7 +38,7 @@ export default function TankMaster({ user }) {
       : 'https://sms.uvtechsolutions.co.in/api/tanks';
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('erp_token');
       const res = await fetch(url, {
         method: method,
         headers: { 
@@ -70,7 +70,7 @@ export default function TankMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this tank? This action cannot be undone.")) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }

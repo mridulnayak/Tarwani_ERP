@@ -42,7 +42,7 @@ export default function DesignationMaster({ user }) {
       : 'https://sms.uvtechsolutions.co.in/api/designations';
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('erp_token');
       const res = await fetch(url, {
         method: method,
         headers: { 
@@ -74,7 +74,7 @@ export default function DesignationMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
