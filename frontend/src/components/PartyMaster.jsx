@@ -53,16 +53,18 @@ export default function PartyMaster({ user }) {
     if (partyType === 'Employee' && !selectedDesignationId) return alert("Select a designation");
 
     const method = editingId ? 'PUT' : 'POST';
-    
-    // BACKTICKS ADDED TO FIX UPDATE ERROR
     const url = editingId 
       ? `https://sms.uvtechsolutions.co.in/api/parties/${editingId}` 
       : 'https://sms.uvtechsolutions.co.in/api/parties';
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ 
           partyName, 
           partyType, 
@@ -97,8 +99,11 @@ export default function PartyMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this entity? This action cannot be undone.")) return;
 
     try {
-      // BACKTICKS ADDED TO FIX DELETE ERROR
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/${id}`, { method: 'DELETE' });
+      const token = localStorage.getItem('token');
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (res.ok) {
         fetchData();
       } else {

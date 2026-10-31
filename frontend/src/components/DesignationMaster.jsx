@@ -38,13 +38,17 @@ export default function DesignationMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `/api/designations/${editingId}` 
-      : '/api/designations';
+      ? `https://sms.uvtechsolutions.co.in/api/designations/${editingId}` 
+      : 'https://sms.uvtechsolutions.co.in/api/designations';
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ designationName }),
       });
 
@@ -70,8 +74,10 @@ export default function DesignationMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchDesignations();

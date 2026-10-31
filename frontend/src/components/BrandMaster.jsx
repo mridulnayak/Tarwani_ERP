@@ -29,16 +29,18 @@ export default function BrandMaster({ user }) {
     if (!brandName) return;
 
     const method = editingId ? 'PUT' : 'POST';
-    
-    // BACKTICKS ADDED TO FIX UPDATE ERROR
     const url = editingId 
       ? `https://sms.uvtechsolutions.co.in/api/brands/${editingId}` 
       : 'https://sms.uvtechsolutions.co.in/api/brands';
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
         body: JSON.stringify({ brandName })
       });
       
@@ -64,9 +66,10 @@ export default function BrandMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this brand? This action cannot be undone.")) return;
 
     try {
-      // BACKTICKS ADDED TO FIX DELETE ERROR
+      const token = localStorage.getItem('token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/brands/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchBrands();

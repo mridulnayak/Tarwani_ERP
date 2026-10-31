@@ -39,7 +39,7 @@ export default function ProductMaster({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Format brands for react-select: { value, label } (Now perfectly safe)
+  // Format brands for react-select: { value, label }
   const brandOptions = brands.map(b => ({
     value: b.BrandID,
     label: b.BrandName
@@ -52,16 +52,20 @@ export default function ProductMaster({ user }) {
     e.preventDefault();
     if (!productName || !brandId) return alert("Select a brand and enter a product name");
     
-    // If editingId exists, we do a PUT (Update). Otherwise, POST (Create).
     const method = editingId ? 'PUT' : 'POST';
+    // UPDATED TO ABSOLUTE URLS FOR MOBILE
     const url = editingId 
-      ? `/api/products/${editingId}` 
-      : '/api/products';
+      ? `https://sms.uvtechsolutions.co.in/api/products/${editingId}` 
+      : 'https://sms.uvtechsolutions.co.in/api/products';
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` // TOKEN ADDED HERE
+        },
         body: JSON.stringify({ productName, brandId })
       });
       
@@ -89,8 +93,10 @@ export default function ProductMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this product? This action cannot be undone.")) return;
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` } // TOKEN ADDED HERE
       });
       if (res.ok) {
         fetchData();
@@ -108,7 +114,7 @@ export default function ProductMaster({ user }) {
     setEditingId(null);
   };
 
-  // Filter products based on search term (Now perfectly safe)
+  // Filter products based on search term
   const filteredProducts = products.filter(p => 
     p.ProductName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     p.BrandName.toLowerCase().includes(searchTerm.toLowerCase())

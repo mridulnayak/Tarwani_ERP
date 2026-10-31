@@ -34,13 +34,17 @@ export default function TankMaster({ user }) {
 
     const method = editingId ? 'PUT' : 'POST';
     const url = editingId 
-      ? `/api/tanks/${editingId}` 
-      : '/api/tanks';
+      ? `https://sms.uvtechsolutions.co.in/api/tanks/${editingId}` 
+      : 'https://sms.uvtechsolutions.co.in/api/tanks';
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({ tankName, capacity: parseInt(capacity) })
       });
       
@@ -66,8 +70,10 @@ export default function TankMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this tank? This action cannot be undone.")) return;
 
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       if (res.ok) {
         fetchTanks();
