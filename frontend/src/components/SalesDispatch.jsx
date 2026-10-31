@@ -45,7 +45,7 @@ export default function SalesDispatch() {
     const [year, month] = selectedMonth.split('-'); 
     
     try {
-      const dispatchRes = await fetch(`/api/sales-dispatch?month=${month}&year=${year}`);
+      const dispatchRes = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-dispatch?month=${month}&year=${year}`);
       setDispatchHistory(await dispatchRes.json());
     } catch (error) {
       console.error("Error fetching dispatch data:", error);

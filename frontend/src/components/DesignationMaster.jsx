@@ -70,7 +70,7 @@ export default function DesignationMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this designation? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`/api/designations/${id}`, {
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

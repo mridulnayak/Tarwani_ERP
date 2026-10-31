@@ -89,7 +89,7 @@ export default function ProductMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this product? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`/api/products/${id}`, {
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

@@ -66,7 +66,7 @@ export default function TankMaster({ user }) {
     if (!window.confirm("Are you sure you want to delete this tank? This action cannot be undone.")) return;
 
     try {
-      const res = await fetch(`/api/tanks/${id}`, {
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/${id}`, {
         method: 'DELETE'
       });
       if (res.ok) {

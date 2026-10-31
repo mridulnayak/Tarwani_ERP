@@ -50,7 +50,7 @@ export default function UserManagement() {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'reactivate'} this account?`)) return;
 
     try {
-      const res = await fetch(`/api/users/${userId}/toggle-status`, {
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/users/${userId}/toggle-status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isActive: !currentStatus }) 
