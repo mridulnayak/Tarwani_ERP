@@ -47,7 +47,7 @@ export default function DesignationMaster({ user }) {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          'x-access-token': token 
         },
         body: JSON.stringify({ designationName }),
       });

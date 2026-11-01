@@ -64,7 +64,7 @@ export default function ProductMaster({ user }) {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // TOKEN ADDED HERE
+          'x-access-token': token // TOKEN ADDED HERE
         },
         body: JSON.stringify({ productName, brandId })
       });

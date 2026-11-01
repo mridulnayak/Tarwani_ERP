@@ -39,7 +39,7 @@ export default function BrandMaster({ user }) {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` 
+          'x-access-token': token 
         },
         body: JSON.stringify({ brandName })
       });
