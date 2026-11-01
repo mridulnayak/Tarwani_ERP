@@ -1,5 +1,5 @@
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.resolve(__dirname, '.env') });
 
 const express = require('express');
 const sql = require('mssql');
@@ -32,6 +32,25 @@ sql.connect(dbConfig).then(() => {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
+
+//AUTH TOKEN ROUTES
+const authenticateToken = (req, res, next) => {
+    // 1. IIS Bypass: Read from custom header instead of 'Authorization'
+    const token = req.headers['x-access-token'];
+    if (!token) {
+        return res.status(401).json({ error: "Access Denied: No token provided." });
+    }
+    const secretKey = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
+    jwt.verify(token, secretKey, (err, user) => {
+        if (err) {
+            console.error("JWT Verification Failed:", err.message);
+            return res.status(401).json({ error: "Unauthorized: Invalid or expired token." });
+        }
+        req.user = user;
+        next();
+    });
+};
+
 
 // ==========================================
 // AUTHENTICATION ROUTES
@@ -73,6 +92,11 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: 'Internal server error during login' });
     }
 });
+
+
+//to protect all routes
+app.use('/api', authenticateToken);
+
 
 // ==========================================
 // USER MANAGEMENT ROUTES (ADMIN ONLY)
