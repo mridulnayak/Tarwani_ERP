@@ -96,7 +96,7 @@ export default function ProductMaster({ user }) {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` } // TOKEN ADDED HERE
+        headers: { 'x-access-token': token } // TOKEN ADDED HERE
       });
       if (res.ok) {
         fetchData();

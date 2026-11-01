@@ -102,7 +102,7 @@ export default function PartyMaster({ user }) {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/${id}`, { 
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'x-access-token': token }
       });
       if (res.ok) {
         fetchData();

@@ -73,7 +73,7 @@ export default function TankMaster({ user }) {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'x-access-token': token}
       });
       if (res.ok) {
         fetchTanks();
