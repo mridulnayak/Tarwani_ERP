@@ -35,17 +35,27 @@ const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
 
 //AUTH TOKEN ROUTES
 const authenticateToken = (req, res, next) => {
-    // 1. IIS Bypass: Read from custom header instead of 'Authorization'
+    // 🚨 1. CORS PREFLIGHT BYPASS (THE MAGIC FIX) 🚨
+    // Browser ke security check (OPTIONS) ko allow karo bina token ke
+    if (req.method === 'OPTIONS') {
+        return next();
+    }
+
+    // 2. Read from custom header
     const token = req.headers['x-access-token'];
+
     if (!token) {
         return res.status(401).json({ error: "Access Denied: No token provided." });
     }
+
     const secretKey = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
+
     jwt.verify(token, secretKey, (err, user) => {
         if (err) {
             console.error("JWT Verification Failed:", err.message);
             return res.status(401).json({ error: "Unauthorized: Invalid or expired token." });
         }
+        
         req.user = user;
         next();
     });
