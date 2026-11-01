@@ -16,16 +16,28 @@ export default function SalesOrder({ user }) {
 
   const fetchData = async () => {
     try {
-      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties');
+      const token = localStorage.getItem('erp_token');
+      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const partyData = await partyRes.json();
-      setCustomers((partyData || []).filter(p => p.PartyType === 'Customer'));
+      setCustomers(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Customer') : []);
 
 
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
-      setProducts(await prodRes.json());
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const prodData = await prodRes.json();
+      setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders');
-      setSalesOrders(await soRes.json());
+      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const soData = await soRes.json();
+      setSalesOrders(Array.isArray(soData) ? soData : []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -46,8 +58,13 @@ export default function SalesOrder({ user }) {
   const generateOrderAcknowledgment = async (order) => {
     try {
       // UPDATED TO ABSOLUTE URL FOR MOBILE APK
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${order.SO_ID}/items`);
-      const orderItems = res.ok ? await res.json() : [];
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${order.SO_ID}/items`, {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const orderItemsData = res.ok ? await res.json() : [];
+      const orderItems = Array.isArray(orderItemsData) ? orderItemsData : [];
 
       const doc = new jsPDF();
       

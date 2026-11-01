@@ -16,7 +16,11 @@ export default function ProductMaster({ user }) {
   const fetchData = async () => {
     // 1. Fetch Products Safely
     try {
-      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
+      const token = localStorage.getItem('erp_token');
+      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!pRes.ok) throw new Error(`Products API Error: ${pRes.status}`);
       const pData = await pRes.json();
       setProducts(Array.isArray(pData) ? pData : []);
@@ -27,7 +31,11 @@ export default function ProductMaster({ user }) {
 
     // 2. Fetch Brands Safely (Independent try/catch block)
     try {
-      const bRes = await fetch('https://sms.uvtechsolutions.co.in/api/brands');
+      const token = localStorage.getItem('erp_token');
+      const bRes = await fetch('https://sms.uvtechsolutions.co.in/api/brands', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!bRes.ok) throw new Error(`Brands API Error: ${bRes.status}`);
       const bData = await bRes.json();
       setBrands(Array.isArray(bData) ? bData : []);

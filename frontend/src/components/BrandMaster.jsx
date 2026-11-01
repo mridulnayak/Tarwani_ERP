@@ -12,7 +12,11 @@ export default function BrandMaster({ user }) {
 
   const fetchBrands = async () => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/brands');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/brands', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
       const data = await res.json();
       setBrands(Array.isArray(data) ? data : []);

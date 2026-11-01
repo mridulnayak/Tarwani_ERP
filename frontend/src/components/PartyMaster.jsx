@@ -18,8 +18,15 @@ export default function PartyMaster({ user }) {
   const [editingId, setEditingId] = useState(null);
 
   const fetchData = async () => {
+    // 1. GET THE TOKEN ONCE AT THE START OF THE FETCH
+    const token = localStorage.getItem('erp_token');
+
     try {
-      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties');
+      // 2. ATTACH THE TOKEN TO THE GET REQUEST
+      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!pRes.ok) throw new Error(`Parties API Error: ${pRes.status}`);
       const pData = await pRes.json();
       setParties(Array.isArray(pData) ? pData : []);
@@ -29,7 +36,11 @@ export default function PartyMaster({ user }) {
     }
 
     try {
-      const dRes = await fetch('https://sms.uvtechsolutions.co.in/api/designations');
+      // 3. ATTACH THE TOKEN TO THE SECOND GET REQUEST
+      const dRes = await fetch('https://sms.uvtechsolutions.co.in/api/designations', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!dRes.ok) throw new Error(`Designations API Error: ${dRes.status}`);
       const dData = await dRes.json();
       setDesignations(Array.isArray(dData) ? dData : []);

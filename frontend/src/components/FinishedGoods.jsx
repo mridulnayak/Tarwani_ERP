@@ -12,9 +12,13 @@ export default function FinishedGoods() {
 
   const fetchInProgressOrders = async () => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const data = await res.json();
-      setInProgressOrders((data || []).filter(po => po.Status === 'In Progress'));
+      setInProgressOrders((Array.isArray(data) ? data : []).filter(po => po.Status === 'In Progress'));
     } catch (error) {
       console.error("Error fetching production orders:", error);
     }
@@ -34,9 +38,13 @@ export default function FinishedGoods() {
 
   const fetchProductsAndMatch = async (productName) => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/products');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const products = await res.json();
-      const match = products.find(p => p.ProductName === productName);
+      const match = (Array.isArray(products) ? products : []).find(p => p.ProductName === productName);
       if (match) setProductId(match.ProductID);
     } catch (error) {
       console.error("Error matching product ID:", error);

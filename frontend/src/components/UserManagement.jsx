@@ -10,8 +10,15 @@ export default function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users');
-      if (res.ok) setUsers(await res.json());
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(Array.isArray(data) ? data : []);
+      }
     } catch (error) {
       console.error("Error fetching users:", error);
     }

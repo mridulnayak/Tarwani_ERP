@@ -13,7 +13,11 @@ export default function TankMaster({ user }) {
 
   const fetchTanks = async () => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/tanks', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       if (!res.ok) throw new Error(`Server responded with status: ${res.status}`);
       const data = await res.json();
       

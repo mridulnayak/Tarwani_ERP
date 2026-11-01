@@ -18,12 +18,20 @@ export default function SalesDispatch() {
 
   const fetchData = async () => {
     try {
-      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders');
+      const token = localStorage.getItem('erp_token');
+      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const soData = await soRes.json();
-      setPendingOrders((soData || []).filter(so => so.Status === 'Pending'));
+      setPendingOrders(Array.isArray(soData) ? soData.filter(so => so.Status === 'Pending') : []);
 
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
-      setProducts(await prodRes.json());
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const prodData = await prodRes.json();
+      setProducts(Array.isArray(prodData) ? prodData : []);
       
       // We removed the automatic dispatch history fetch from here!
       // It will now only load when the user specifically asks for it.
@@ -45,8 +53,13 @@ export default function SalesDispatch() {
     const [year, month] = selectedMonth.split('-'); 
     
     try {
-      const dispatchRes = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-dispatch?month=${month}&year=${year}`);
-      setDispatchHistory(await dispatchRes.json());
+      const token = localStorage.getItem('erp_token');
+      const dispatchRes = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-dispatch?month=${month}&year=${year}`, {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const dispatchData = await dispatchRes.json();
+      setDispatchHistory(Array.isArray(dispatchData) ? dispatchData : []);
     } catch (error) {
       console.error("Error fetching dispatch data:", error);
     }

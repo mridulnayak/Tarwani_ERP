@@ -13,18 +13,34 @@ export default function IssualManagement() {
 
   const fetchData = async () => {
     try {
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders');
+      const token = localStorage.getItem('erp_token');
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const poData = await poRes.json();
-      setProductionOrders((poData || []).filter(po => po.Status === 'Pending'));
+      setProductionOrders(Array.isArray(poData) ? poData.filter(po => po.Status === 'Pending') : []);
 
-      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
-      setTanks(await tankRes.json());
+      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const tankData = await tankRes.json();
+      setTanks(Array.isArray(tankData) ? tankData : []);
 
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
-      setProducts(await prodRes.json());
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const prodData = await prodRes.json();
+      setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const issueRes = await fetch('https://sms.uvtechsolutions.co.in/api/issuals');
-      setIssuals(await issueRes.json());
+      const issueRes = await fetch('https://sms.uvtechsolutions.co.in/api/issuals', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const issueData = await issueRes.json();
+      setIssuals(Array.isArray(issueData) ? issueData : []);
     } catch (error) {
       console.error("Error fetching data:", error);
     }

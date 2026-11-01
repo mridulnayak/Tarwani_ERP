@@ -14,15 +14,27 @@ export default function PurchaseReceiving() {
 
   const fetchData = async () => {
     try {
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders');
+      const token = localStorage.getItem('erp_token');
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       const poData = await poRes.json();
-           setPendingPOs((poData || []).filter(po => po.Status === 'Pending'));
+      setPendingPOs(Array.isArray(poData) ? poData.filter(po => po.Status === 'Pending') : []);
 
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products');
-      setProducts(await prodRes.json());
+      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const prodData = await prodRes.json();
+      setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks');
-      setTanks(await tankRes.json());
+      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
+      const tankData = await tankRes.json();
+      setTanks(Array.isArray(tankData) ? tankData : []);
     } catch (error) {
       console.error("Error fetching receiving data:", error);
     }

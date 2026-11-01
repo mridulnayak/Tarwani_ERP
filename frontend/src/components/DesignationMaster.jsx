@@ -12,7 +12,11 @@ export default function DesignationMaster({ user }) {
 
   const fetchDesignations = async () => {
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/designations');
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/designations', {
+        method: 'GET',
+        headers: { 'x-access-token': token }
+      });
       
       if (!res.ok) {
         throw new Error(`Server responded with status: ${res.status}`);
@@ -77,7 +81,7 @@ export default function DesignationMaster({ user }) {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'x-access-token': token }
       });
       if (res.ok) {
         fetchDesignations();

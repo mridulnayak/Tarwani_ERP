@@ -11,9 +11,19 @@ export default function Dashboard({ user }) {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const res = await fetch('https://sms.uvtechsolutions.co.in/api/dashboard-stats');
+        const token = localStorage.getItem('erp_token');
+        const res = await fetch('https://sms.uvtechsolutions.co.in/api/dashboard-stats', {
+          method: 'GET',
+          headers: { 'x-access-token': token }
+        });
         if (res.ok) {
-          setStats(await res.json());
+          const data = await res.json();
+          setStats({
+            pendingSales: data.pendingSales ?? 0,
+            pendingPurchases: data.pendingPurchases ?? 0,
+            activeProduction: data.activeProduction ?? 0,
+            lowStockItems: Array.isArray(data.lowStockItems) ? data.lowStockItems : []
+          });
         }
       } catch (error) {
         console.error("Error fetching dashboard stats:", error);
