@@ -111,10 +111,14 @@ export default function PartyMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/${id}`, { 
-        method: 'DELETE',
-        headers: { 'x-access-token': token }
-      });
+const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${id}`, { 
+    // METHOD BADAL KAR POST KAR DIYA
+    method: 'POST',
+    headers: { 
+        'Content-Type': 'application/json',
+        'x-access-token': token 
+    }
+});
       if (res.ok) {
         fetchData();
       } else {

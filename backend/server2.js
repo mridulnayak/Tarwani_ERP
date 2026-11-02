@@ -494,33 +494,22 @@ app.delete('/api/tanks/:id', async (req, res) => {
 
 //GST & parties
 // 1. POST: Create a new Party
-app.post('/api/parties', async (req, res) => {
+// DELETE request ko POST method se bypass kar diya
+app.post('/api/parties/delete/:id', async (req, res) => {
     try {
-        // Added gstNumber to the incoming request body
-        const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body; 
-        
-        if (!partyName || !partyType) {
-            return res.status(400).json({ error: 'Party Name and Type are required' });
-        }
-
+        const { id } = req.params;
         const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('name', sql.VarChar, partyName) 
-            .input('type', sql.VarChar, partyType) 
-            .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null) 
-            .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
-            .input('address', sql.Text, partyType !== 'Employee' ? address : null)
-            // Save GST only if it is a Vendor or Customer
-            .input('gst', sql.VarChar, partyType !== 'Employee' ? gstNumber : null)
-            .query(`
-                INSERT INTO mridul.PartyMaster (PartyName, PartyType, DesignationID, ContactNumber, Address, GSTNumber) 
-                VALUES (@name, @type, @desigId, @contact, @address, @gst)
-            `);
-
-        res.status(201).json({ message: `${partyType} created successfully!` });
-    } catch (err) {
-        console.error('Error creating party:', err);
-        res.status(500).json({ error: 'Failed to create party record' });
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .query('DELETE FROM mridul.PartyMaster WHERE PartyID = @id');
+        
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'Party not found' });
+        }
+        res.status(200).json({ message: 'Party deleted successfully!' });
+    } catch (err) { 
+        console.error('Error deleting party:', err);
+        res.status(500).json({ error: 'Failed to delete party.' }); 
     }
 });
 
