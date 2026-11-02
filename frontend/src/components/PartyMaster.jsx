@@ -63,9 +63,9 @@ export default function PartyMaster({ user }) {
     if (!partyName) return alert("Name is required");
     if (partyType === 'Employee' && !selectedDesignationId) return alert("Select a designation");
 
-    const method = editingId ? 'PUT' : 'POST';
+    const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/parties/${editingId}` 
+      ? `https://sms.uvtechsolutions.co.in/api/parties/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/parties';
 
     try {
