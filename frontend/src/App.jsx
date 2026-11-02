@@ -147,11 +147,26 @@ export default function App() {
   return (
     <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
       
-      {/* MOBILE TOP BAR */}
-<div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center px-4 z-50 shadow-md gap-3">
-  <img src="/tarwani.png" alt="Logo" className="h-8 w-auto object-contain bg-white rounded p-0.5" />
-  <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
-</div>
+{/* MOBILE TOP BAR */}
+      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center justify-between px-4 z-50 shadow-md">
+        <div className="flex items-center gap-3">
+          <img 
+            src="/tarwani.png" 
+            alt="Tarwani Soaps Logo" 
+            className="h-8 w-auto object-contain bg-white rounded p-0.5 shadow-sm"
+            onError={(e) => {
+              e.target.style.display = 'none'; // Fallback if image file name differs
+            }}
+          />
+          <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
+        </div>
+        <button 
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="text-white focus:outline-none text-2xl"
+        >
+          {isMobileMenuOpen ? '✕' : '☰'}
+        </button>
+      </div>
 
       {/* SIDEBAR (Hidden on mobile unless toggled, fixed on desktop) */}
       <aside className={`absolute md:relative top-0 left-0 h-full w-72 bg-gray-900 text-gray-300 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
