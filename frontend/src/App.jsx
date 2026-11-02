@@ -149,7 +149,7 @@ export default function App() {
       
       {/* MOBILE TOP BAR */}
 <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center px-4 z-50 shadow-md gap-3">
-  <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain bg-white rounded p-0.5" />
+  <img src="/tarwani.png" alt="Logo" className="h-8 w-auto object-contain bg-white rounded p-0.5" />
   <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
 </div>
 
