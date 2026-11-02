@@ -32,9 +32,9 @@ export default function BrandMaster({ user }) {
     e.preventDefault();
     if (!brandName) return;
 
-    const method = editingId ? 'PUT' : 'POST';
+    const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/brands/${editingId}` 
+      ? `https://sms.uvtechsolutions.co.in/api/brands/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/brands';
 
     try {
@@ -71,8 +71,8 @@ export default function BrandMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/brands/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/brands/delete/${id}`, {
+        method: 'POST',
         headers: { 'x-access-token': token }
       });
       if (res.ok) {

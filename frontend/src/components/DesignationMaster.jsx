@@ -40,9 +40,9 @@ export default function DesignationMaster({ user }) {
     e.preventDefault();
     if (!designationName) return;
 
-    const method = editingId ? 'PUT' : 'POST';
+    const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/designations/${editingId}` 
+      ? `https://sms.uvtechsolutions.co.in/api/designations/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/designations';
 
     try {
@@ -79,8 +79,8 @@ export default function DesignationMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/delete/${id}`, {
+        method: 'POST',
         headers: { 'x-access-token': token }
       });
       if (res.ok) {

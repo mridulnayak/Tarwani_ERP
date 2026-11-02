@@ -57,9 +57,13 @@ export default function UserManagement() {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'reactivate'} this account?`)) return;
 
     try {
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/users/${userId}/toggle-status`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/users/toggle-status/${userId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token
+        },
         body: JSON.stringify({ isActive: !currentStatus }) 
       });
 

@@ -36,9 +36,9 @@ export default function TankMaster({ user }) {
     e.preventDefault();
     if (!tankName || !capacity) return;
 
-    const method = editingId ? 'PUT' : 'POST';
+    const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/tanks/${editingId}` 
+      ? `https://sms.uvtechsolutions.co.in/api/tanks/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/tanks';
 
     try {
@@ -75,8 +75,8 @@ export default function TankMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/delete/${id}`, {
+        method: 'POST',
         headers: { 'x-access-token': token}
       });
       if (res.ok) {

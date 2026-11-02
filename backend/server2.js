@@ -159,7 +159,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 // 3. PUT: Toggle User Active Status (Soft Delete)
-app.put('/api/users/:id/toggle-status', async (req, res) => {
+app.post('/api/users/toggle-status/:id', async (req, res) => {
     const { id } = req.params;
     const { isActive } = req.body;
 
@@ -253,7 +253,7 @@ app.get('/api/designations', async (req, res) => {
 });
 
 // Update an existing designation (EDIT)
-app.put('/api/designations/:id', async (req, res) => {
+app.post('/api/designations/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { designationName } = req.body;
@@ -274,7 +274,7 @@ app.put('/api/designations/:id', async (req, res) => {
 });
 
 // Delete a designation (DELETE)
-app.delete('/api/designations/:id', async (req, res) => {
+app.post('/api/designations/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -316,7 +316,7 @@ app.get('/api/brands', async (req, res) => {
 });
 
 // Update an existing brand (EDIT)
-app.put('/api/brands/:id', async (req, res) => {
+app.post('/api/brands/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { brandName } = req.body;
@@ -337,7 +337,7 @@ app.put('/api/brands/:id', async (req, res) => {
 });
 
 // Delete a brand (DELETE)
-app.delete('/api/brands/:id', async (req, res) => {
+app.post('/api/brands/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -383,7 +383,7 @@ app.get('/api/products', async (req, res) => {
 });
 
 // Update an existing product (EDIT)
-app.put('/api/products/:id', async (req, res) => {
+app.post('/api/products/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { productName, brandId } = req.body;
@@ -408,7 +408,7 @@ app.put('/api/products/:id', async (req, res) => {
 });
 
 // Delete a product (DELETE)
-app.delete('/api/products/:id', async (req, res) => {
+app.post('/api/products/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -454,7 +454,7 @@ app.get('/api/tanks', async (req, res) => {
 });
 
 // Update an existing tank (EDIT)
-app.put('/api/tanks/:id', async (req, res) => {
+app.post('/api/tanks/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { tankName, capacity } = req.body;
@@ -476,7 +476,7 @@ app.put('/api/tanks/:id', async (req, res) => {
 });
 
 // Delete a tank (DELETE)
-app.delete('/api/tanks/:id', async (req, res) => {
+app.post('/api/tanks/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -532,7 +532,7 @@ app.get('/api/parties', async (req, res) => {
 });
 
 // 3. PUT: Update an existing Party (EDIT)
-app.put('/api/parties/:id', async (req, res) => {
+app.post('/api/parties/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body;
@@ -573,7 +573,7 @@ app.put('/api/parties/:id', async (req, res) => {
 });
 
 // 4. DELETE: Remove a Party
-app.delete('/api/parties/:id', async (req, res) => {
+app.post('/api/parties/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
 
@@ -695,7 +695,7 @@ app.get('/api/purchase-orders/:id/items', async (req, res) => {
 });
 
 // 3. DELETE: Cancel a pending PO (Enterprise Best Practice)
-app.delete('/api/purchase-orders/:id', async (req, res) => {
+app.post('/api/purchase-orders/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await sql.connect(dbConfig);
@@ -872,7 +872,7 @@ app.get('/api/production-orders', async (req, res) => {
 });
 
 // 3. DELETE: Cancel a pending Production Order (Safe Delete)
-app.delete('/api/production-orders/:id', async (req, res) => {
+app.post('/api/production-orders/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await sql.connect(dbConfig);

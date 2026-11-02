@@ -60,10 +60,10 @@ export default function ProductMaster({ user }) {
     e.preventDefault();
     if (!productName || !brandId) return alert("Select a brand and enter a product name");
     
-    const method = editingId ? 'PUT' : 'POST';
+    const method = 'POST';
     // UPDATED TO ABSOLUTE URLS FOR MOBILE
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/products/${editingId}` 
+      ? `https://sms.uvtechsolutions.co.in/api/products/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/products';
 
     try {
@@ -102,8 +102,8 @@ export default function ProductMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/delete/${id}`, {
+        method: 'POST',
         headers: { 'x-access-token': token } // TOKEN ADDED HERE
       });
       if (res.ok) {
