@@ -69,14 +69,23 @@ export default function App() {
         { id: 'designation', label: 'Employee Designation', roles: ['Admin'] },
         { id: 'brand', label: 'Brand Master', roles: ['Admin'] },
         { id: 'product', label: 'Product / Box Master', roles: ['Admin', 'Production'] },
-        { id: 'tank', label: 'Tank Master', roles: ['Admin', 'Store'] },
+      ]
+    },
+    {
+      // Separated Tank Management as requested
+      title: 'Tank Management',
+      allowedRoles: ['Admin', 'Store'],
+      items: [
+        { id: 'tank', label: 'Tank Dashboard / Master', roles: ['Admin', 'Store'] },
       ]
     },
     {
       title: 'Production',
       allowedRoles: ['Admin', 'Production'],
       items: [
-        { id: 'production', label: 'Production Entry', roles: ['Admin', 'Production'] },
+        { id: 'production', label: 'Production Orders', roles: ['Admin', 'Production'] },
+        // Added the new Production Entry component here
+        { id: 'production_entry', label: 'Production Batch Entry', roles: ['Admin', 'Production'] },
         { id: 'finished', label: 'Finished Goods Receipt', roles: ['Admin', 'Production'] },
       ]
     },
@@ -101,7 +110,9 @@ export default function App() {
       title: 'Sec Admin',
       allowedRoles: ['Admin'],
       items: [
-        { id: 'users', label: 'User Entry / Registration', roles: ['Admin'] }
+        { id: 'users', label: 'User Registration', roles: ['Admin'] },
+        // Added the new Role Allocation component here
+        { id: 'roles', label: 'Role Allocation', roles: ['Admin'] }
       ]
     }
   ];
@@ -109,19 +120,21 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': return <Dashboard user={user} />;
-      case 'users': return <UserManagement />;
+      case 'users': return <UserManagement user={user} />;
+      case 'roles': return <RoleAllocation user={user} />; // Added Route
       case 'party': return <PartyMaster user={user} />;
       case 'designation': return <DesignationMaster user={user} />;
       case 'brand': return <BrandMaster user={user} />;
       case 'product': return <ProductMaster user={user} />;
       case 'tank': return <TankMaster user={user} />;
-      case 'purchase': return <PurchaseOrder />;
-      case 'receiving': return <PurchaseReceiving />;
-      case 'production': return <ProductionOrder />;
-      case 'issual': return <IssualManagement />;
-      case 'finished': return <FinishedGoods />;
-      case 'sales': return <SalesOrder />;
-      case 'dispatch': return <SalesDispatch />;
+      case 'purchase': return <PurchaseOrder user={user} />;
+      case 'receiving': return <PurchaseReceiving user={user} />;
+      case 'production': return <ProductionOrder user={user} />;
+      case 'production_entry': return <ProductionEntry user={user} />; // Added Route
+      case 'issual': return <IssualManagement user={user} />;
+      case 'finished': return <FinishedGoods user={user} />;
+      case 'sales': return <SalesOrder user={user} />;
+      case 'dispatch': return <SalesDispatch user={user} />;
       default: return <Dashboard user={user} />;
     }
   };
