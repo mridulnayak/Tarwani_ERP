@@ -1342,7 +1342,7 @@ app.get('*', (req, res) => {
         }
     });
 });
-
+app.get('/api/shanu-test', (req, res) => res.json({ message: "Bhai code update ho gaya!" }));
 const PORT = process.env.PORT || 5000; 
 app.listen(PORT, () => {
   console.log(`Server is running smoothly on port ${PORT}`);
