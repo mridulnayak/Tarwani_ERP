@@ -148,24 +148,28 @@ export default function App() {
     <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
       
       {/* MOBILE TOP BAR */}
-      <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center justify-between px-4 z-50 shadow-md">
-        <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
-        <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="text-white focus:outline-none text-2xl"
-        >
-          {isMobileMenuOpen ? '✕' : '☰'}
-        </button>
-      </div>
+<div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center px-4 z-50 shadow-md gap-3">
+  <img src="/logo.png" alt="Logo" className="h-8 w-auto object-contain bg-white rounded p-0.5" />
+  <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
+</div>
 
       {/* SIDEBAR (Hidden on mobile unless toggled, fixed on desktop) */}
       <aside className={`absolute md:relative top-0 left-0 h-full w-72 bg-gray-900 text-gray-300 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
         ${isMobileMenuOpen ? 'translate-x-0 pt-16' : '-translate-x-full md:translate-x-0'}
       `}>
         {/* DESKTOP HEADER */}
-        <div className="hidden md:block p-6 bg-gray-950 border-b border-gray-800 text-center">
-          <h1 className="text-xl font-black text-white tracking-wider uppercase">Tarwani Soaps</h1>
-          <p className="text-xs text-blue-400 mt-2 font-medium">Logged in as: {user.role}</p>
+        <div className="hidden md:flex flex-col items-center justify-center p-5 bg-gray-950 border-b border-gray-800 text-center">
+          <img 
+            src="/tarwani.png" 
+            alt="Tarwani Soaps Logo" 
+            className="h-12 w-auto object-contain mb-2"
+            onError={(e) => {
+              // Fallback if image fails to load
+              e.target.style.display = 'none';
+            }}
+          />
+          <h1 className="text-lg font-black text-white tracking-wider uppercase">Tarwani Soaps</h1>
+          <p className="text-xs text-blue-400 mt-1 font-medium">Logged in as: {user.role}</p>
         </div>
 
         {/* NAVIGATION ACCORDION */}
