@@ -10,6 +10,7 @@ export default function TankMaster({ user }) {
   // Enterprise Features State
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
+  const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchTanks = async () => {
     try {
@@ -67,6 +68,7 @@ export default function TankMaster({ user }) {
     setTankName(tank.TankName);
     setCapacity(tank.Capacity);
     setEditingId(tank.TankID);
+    setIsFormVisible(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -93,6 +95,7 @@ export default function TankMaster({ user }) {
     setTankName('');
     setCapacity('');
     setEditingId(null);
+    setIsFormVisible(false);
   };
 
   // Filter tanks based on search term (now perfectly safe)
@@ -101,170 +104,164 @@ export default function TankMaster({ user }) {
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
-          {editingId ? 'Edit Tank' : 'Tank Master'}
+    <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
+      {/* ENTERPRISE TOOLBAR */}
+      <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
+          Tank Master
         </h2>
-        {editingId && (
-          <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
-            Editing Mode Active
-          </span>
-        )}
-      </div>
 
-      {/* FORM SECTION */}
-      <div className="p-5 md:p-6 bg-white">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Tank Name</label>
-            <input 
-              type="text" 
-              value={tankName} 
-              onChange={(e) => setTankName(e.target.value)} 
-              placeholder="e.g., Silo A" 
-              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-            />
-          </div>
-
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Max Capacity (L)</label>
-            <input 
-              type="number" 
-              value={capacity} 
-              onChange={(e) => setCapacity(e.target.value)} 
-              placeholder="e.g., 5000" 
-              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-            />
-          </div>
-
-          <div className="md:col-span-1 flex gap-2">
-            <button 
-              type="submit" 
-              className={`flex-1 px-4 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-cyan-600 hover:bg-cyan-700 focus:ring-cyan-300'}`}
+        <div className="flex w-full md:w-auto gap-3">
+          <input
+            type="search"
+            placeholder="Search tanks..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+          />
+          {!isFormVisible && (
+            <button
+              type="button"
+              onClick={() => {
+                setTankName('');
+                setCapacity('');
+                setEditingId(null);
+                setIsFormVisible(true);
+              }}
+              className="whitespace-nowrap px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
             >
-              {editingId ? 'Update' : '+ Save'}
+              + Create New
             </button>
-            {editingId && (
-              <button 
-                type="button" 
-                onClick={cancelEdit}
-                className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      {/* DATA DISPLAY SECTION */}
-      <div className="border-t border-gray-200">
-        
-        {/* GLOBAL SEARCH BAR */}
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <span className="text-gray-400">🔍</span>
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search tanks..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
-            />
-          </div>
-        </div>
-
-        {/* MOBILE VIEW: Cards */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {filteredTanks.map((t) => (
-            <div key={t.TankID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-3">
-                <span className="font-bold text-gray-900 text-lg flex items-center gap-2">
-                  <span>🛢️</span> {t.TankName}
-                </span>
-                <span className="text-xs font-mono text-gray-400">#{t.TankID}</span>
-              </div>
-              <div className="flex justify-between items-center text-sm mb-3">
-                <span className="text-gray-600">Capacity: {t.Capacity} L</span>
-                <span className="px-3 py-1 bg-green-100 text-green-800 font-bold rounded-full border border-green-200">
-                  Stock: {t.CurrentStock} L
-                </span>
-              </div>
-              {/* Admin Actions Mobile */}
-              {user?.role === 'Admin' && (
-                <div className="flex gap-2 border-t border-gray-100 pt-3">
-                  <button onClick={() => handleEdit(t)} className="flex-1 p-2 bg-blue-50 text-blue-700 rounded-md font-bold text-xs hover:bg-blue-100 transition-colors">Edit</button>
-                  <button onClick={() => handleDelete(t.TankID)} className="flex-1 p-2 bg-red-50 text-red-700 rounded-md font-bold text-xs hover:bg-red-100 transition-colors">Delete</button>
-                </div>
-              )}
-            </div>
-          ))}
-          {filteredTanks.length === 0 && (
-             <div className="p-6 text-center text-gray-500">No tanks found.</div>
           )}
         </div>
+      </div>
 
-        {/* DESKTOP VIEW: Table */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold w-24">ID</th>
-                <th className="px-6 py-4 font-semibold">Tank Name</th>
-                <th className="px-6 py-4 font-semibold">Max Capacity</th>
-                <th className="px-6 py-4 font-semibold">Current Stock</th>
-                {user?.role === 'Admin' && (
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredTanks.map((t) => (
-                <tr key={t.TankID} className="hover:bg-gray-50 transition-colors bg-white group">
-                  <td className="px-6 py-4 font-mono text-gray-500">{t.TankID}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900 flex items-center gap-2">
-                    <span className="text-gray-400">🛢️</span> {t.TankName}
+      {/* DATA ENTRY FORM (Hidden by default) */}
+      {isFormVisible && (
+        <div className="p-5 bg-blue-50 border-b border-blue-200">
+          <form onSubmit={handleSubmit} className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex flex-col gap-1 w-full md:w-1/3">
+              <label className="text-xs font-bold text-gray-700 uppercase">Tank Name</label>
+              <input
+                type="text"
+                value={tankName}
+                onChange={(e) => setTankName(e.target.value)}
+                placeholder="e.g., Silo A"
+                className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-col gap-1 w-full md:w-1/3">
+              <label className="text-xs font-bold text-gray-700 uppercase">Max Capacity (L)</label>
+              <input
+                type="number"
+                value={capacity}
+                onChange={(e) => setCapacity(e.target.value)}
+                placeholder="e.g., 5000"
+                className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              />
+            </div>
+            <div className="w-full md:w-auto flex gap-2">
+              <button
+                type="submit"
+                className={`px-8 py-2 text-white font-bold rounded shadow-sm transition-colors ${editingId ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                {editingId ? 'Update' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={cancelEdit}
+                className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* DENSE TABULAR DATA DISPLAY */}
+      <div className="w-full overflow-x-auto">
+        <table className="w-full text-left text-sm text-gray-800">
+          <thead className="text-xs uppercase bg-slate-700 text-white">
+            <tr>
+              <th className="px-4 py-3 font-bold w-24 border-r border-slate-600">ID</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Tank Name</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Max Capacity</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Current Stock</th>
+              {user?.role === 'Admin' && (
+                <>
+                  <th className="px-4 py-3 font-bold w-24 text-center border-r border-slate-600">Edit</th>
+                  <th className="px-4 py-3 font-bold w-24 text-center">Delete</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-300">
+            {filteredTanks.map((tank) => {
+              // Calculate fill percentage safely
+              const capacity = parseFloat(tank.Capacity) || 1;
+              const stock = parseFloat(tank.CurrentStock) || 0;
+              const percentage = Math.min((stock / capacity) * 100, 100).toFixed(1);
+              
+              // Dynamic color coding based on fill level
+              let barColor = 'bg-green-500';
+              if (percentage > 90) barColor = 'bg-red-500'; // Critical
+              else if (percentage > 75) barColor = 'bg-yellow-500'; // Warning
+
+              return (
+                <tr key={tank.TankID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
+                  <td className="px-4 py-3 font-mono text-gray-600 border-r border-gray-200">{tank.TankID}</td>
+                  <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-200">{tank.TankName}</td>
+                  <td className="px-4 py-3 font-mono text-gray-700 border-r border-gray-200">{tank.Capacity} L</td>
+                  
+                  {/* VISUAL FILL STATUS DASHBOARD COLUMN */}
+                  <td className="px-4 py-3 border-r border-gray-200 w-64">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="font-bold text-gray-900">{stock} L</span>
+                      <span className="font-mono font-bold text-gray-600">{percentage}%</span>
+                    </div>
+                    <div className="w-full bg-gray-300 rounded-full h-3 shadow-inner">
+                      <div 
+                        className={`h-3 rounded-full ${barColor} transition-all duration-500`} 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
                   </td>
-                  <td className="px-6 py-4">{t.Capacity} L</td>
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-green-600 bg-green-50 px-2.5 py-1 rounded-md border border-green-100">
-                      {t.CurrentStock} L
-                    </span>
-                  </td>
-                  {/* Admin Actions Desktop */}
+                  
                   {user?.role === 'Admin' && (
-                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleEdit(t)}
-                        className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(t.TankID)}
-                        className="text-red-600 hover:text-red-800 font-semibold transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </td>
+                    <>
+                      <td className="px-4 py-3 text-center border-r border-gray-200">
+                        <button
+                          type="button"
+                          onClick={() => handleEdit(tank)}
+                          className="font-bold text-blue-600 hover:text-blue-800 underline transition-colors"
+                        >
+                          Edit
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(tank.TankID)}
+                          className="font-bold text-red-600 hover:text-red-800 underline transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </>
                   )}
                 </tr>
-              ))}
-              {filteredTanks.length === 0 && (
-                <tr>
-                  <td colSpan={user?.role === 'Admin' ? 5 : 4} className="px-6 py-8 text-center text-gray-500">
-                    No tanks found matching your search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              );
+            })}
+            {filteredTanks.length === 0 && (
+              <tr>
+                <td colSpan={user?.role === 'Admin' ? 6 : 4} className="px-4 py-8 text-center text-gray-500 font-medium">
+                  No tanks found matching your search.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -9,8 +9,6 @@ export default function PurchaseOrder({ user }) {
 
   // Form State
   const [vendorId, setVendorId] = useState('');
-  // We keep 'rate: 0' in the background state so the backend database doesn't break,
-  // but we won't show it to the user.
   const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
   
   // Enterprise Features
@@ -48,16 +46,23 @@ export default function PurchaseOrder({ user }) {
 
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
   const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
+  
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    
+    // 🚨 Negative Quantity Patch: Force quantities to be at least 1
+    if (field === 'quantity') {
+        newItems[index][field] = Math.max(1, parseInt(value) || 1);
+    } else {
+        newItems[index][field] = value;
+    }
+    
     setItems(newItems);
   };
 
-// --- PDF GENERATION LOGIC ---
+  // --- PDF GENERATION LOGIC ---
   const generatePurchaseOrderPDF = async (order) => {
     try {
-      // UPDATED TO ABSOLUTE URL FOR MOBILE APK
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/purchase-orders/${order.PO_ID}/items`, {
         method: 'GET',
@@ -68,7 +73,6 @@ export default function PurchaseOrder({ user }) {
 
       const doc = new jsPDF();
       
-      // 1. Company Header
       doc.setFontSize(22);
       doc.setTextColor(41, 128, 185);
       doc.text("TARWANI SOAPS", 105, 20, { align: "center" });
@@ -78,7 +82,6 @@ export default function PurchaseOrder({ user }) {
       doc.text("Official Purchase Order", 105, 28, { align: "center" });
       doc.line(14, 32, 196, 32);
 
-      // 2. Order Metadata
       doc.setFontSize(11);
       doc.setTextColor(40, 40, 40);
       doc.text(`Order Date: ${new Date(order.OrderDate).toLocaleDateString()}`, 14, 42);
@@ -86,7 +89,6 @@ export default function PurchaseOrder({ user }) {
       doc.text(`Vendor Name: ${order.VendorName}`, 14, 56);
       doc.text(`Status: ${order.Status}`, 14, 63);
 
-      // 3. Items Table (Rate and Amount removed as per stakeholder request)
       const tableRows = orderItems.length > 0 
         ? (orderItems || []).map((item, index) => [
             (index + 1).toString(),
@@ -95,7 +97,6 @@ export default function PurchaseOrder({ user }) {
           ])
         : [['-', 'Items pending database sync...', '-']];
 
-      // UPDATED TO STANDALONE FUNCTION
       autoTable(doc, {
         startY: 72,
         headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
@@ -104,7 +105,6 @@ export default function PurchaseOrder({ user }) {
         theme: 'grid',
       });
 
-      // 4. Footer
       const finalY = doc.lastAutoTable.finalY + 30;
       doc.setFontSize(10);
       doc.text("Authorized Purchasing Officer", 130, finalY);
@@ -129,9 +129,13 @@ export default function PurchaseOrder({ user }) {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
+      const token = localStorage.getItem('erp_token');
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+            'Content-Type': 'application/json',
+            'x-access-token': token // 🚨 IDENTITY FIX: Token is now sent
+        },
         body: JSON.stringify({ vendorId, items })
       });
       
@@ -147,7 +151,6 @@ export default function PurchaseOrder({ user }) {
     }
   };
 
-  // Filter Purchase Orders based on search term
   const filteredOrders = (purchaseOrders || []).filter(po => 
     po.PONumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     po.VendorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -157,10 +160,15 @@ export default function PurchaseOrder({ user }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Purchase Order</h2>
-        <p className="text-sm text-gray-500 mt-1">Issue official POs to vendors for raw material procurement.</p>
+      {/* HEADER WITH USER BADGE */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Purchase Order</h2>
+          <p className="text-sm text-gray-500 mt-1">Issue official POs to vendors for raw material procurement.</p>
+        </div>
+        <div className="hidden md:flex bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200 items-center gap-2">
+          <span>👤</span> Logged in as: {user?.username || 'Admin'}
+        </div>
       </div>
       
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
@@ -176,14 +184,12 @@ export default function PurchaseOrder({ user }) {
           </select>
         </div>
 
-        {/* DETAILS: Dynamic Product Rows */}
         <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
           <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Materials Required</h3>
           
           {(items || []).map((item, index) => (
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
               
-              {/* Increased col-span from 5 to 8 to fill the space left by removing the Rate column */}
               <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
                 <select 
@@ -201,24 +207,11 @@ export default function PurchaseOrder({ user }) {
                 <input 
                   type="number" min="1"
                   value={item.quantity} 
-                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                  onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                   placeholder="Qty"
                   className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
-
-              {/* RATE COLUMN HIDDEN AS PER STAKEHOLDER REQUEST */}
-              {/* 
-              <div className="md:col-span-3 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Purchase Rate (₹)</label>
-                <input 
-                  type="number" step="0.01" min="0"
-                  value={item.rate} 
-                  onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div> 
-              */}
 
               <div className="md:col-span-1">
                 {items.length > 1 && (
@@ -253,7 +246,6 @@ export default function PurchaseOrder({ user }) {
 
       {/* RECENT PURCHASE ORDERS SECTION */}
       <div className="border-t border-gray-200">
-        
         <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Recent Purchase Orders</h3>
           <div className="relative w-full md:w-1/3">
@@ -270,7 +262,7 @@ export default function PurchaseOrder({ user }) {
           </div>
         </div>
 
-        {/* MOBILE VIEW: Cards */}
+        {/* MOBILE VIEW */}
         <div className="md:hidden divide-y divide-gray-200">
           {(filteredOrders || []).map((po) => (
             <div key={po.PO_ID} className="p-4 hover:bg-gray-50 transition-colors">
@@ -297,7 +289,7 @@ export default function PurchaseOrder({ user }) {
           )}
         </div>
 
-        {/* DESKTOP VIEW: Table */}
+        {/* DESKTOP VIEW */}
         <div className="hidden md:block w-full overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">

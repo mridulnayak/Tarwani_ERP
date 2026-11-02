@@ -16,6 +16,7 @@ export default function PartyMaster({ user }) {
   // Enterprise Features State
   const [searchTerm, setSearchTerm] = useState(''); 
   const [editingId, setEditingId] = useState(null);
+  const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchData = async () => {
     // 1. GET THE TOKEN ONCE AT THE START OF THE FETCH
@@ -103,6 +104,7 @@ export default function PartyMaster({ user }) {
     setAddress(party.Address || '');
     setGstNumber(party.GSTNumber || '');
     setEditingId(party.PartyID);
+    setIsFormVisible(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -137,6 +139,7 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
     setAddress(''); 
     setGstNumber('');
     setEditingId(null);
+    setIsFormVisible(false);
   };
 
   const filteredParties = parties.filter((p) => {
@@ -160,25 +163,42 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
-          {editingId ? 'Edit Party' : 'Party Master'}
+    <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
+      {/* ENTERPRISE TOOLBAR */}
+      <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
+          Party Master
         </h2>
-        {editingId && (
-          <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
-            Editing Mode Active
-          </span>
-        )}
+        <div className="flex w-full md:w-auto gap-3">
+          <input
+            type="search"
+            placeholder="Search Parties by Name, Type, Role, or GST..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+          />
+          {!isFormVisible && (
+            <button
+              type="button"
+              onClick={() => {
+                cancelEdit();
+                setIsFormVisible(true);
+              }}
+              className="whitespace-nowrap px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
+            >
+              + Create New
+            </button>
+          )}
+        </div>
       </div>
-      
-      {/* FORM SECTION */}
-      <div className="p-5 md:p-6 bg-white">
-        <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+
+      {/* DATA ENTRY FORM (Hidden by default) */}
+      {isFormVisible && (
+        <div className="p-5 bg-blue-50 border-b border-blue-200">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-5">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase">Party Type</label>
+              <label className="text-xs font-bold text-gray-700 uppercase">Party Type</label>
               <select 
                 value={partyType} 
                 onChange={(e) => {
@@ -186,7 +206,7 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
                   if (e.target.value !== 'Employee') setSelectedDesignationId('');
                 }} 
                 disabled={editingId !== null}
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50"
               >
                 <option value="Employee">Employee</option>
                 <option value="Vendor">Vendor</option>
@@ -195,13 +215,13 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
             </div>
             
             <div className="flex flex-col gap-1 md:col-span-2">
-              <label className="text-xs font-semibold text-gray-500 uppercase">{partyType} Name</label>
+              <label className="text-xs font-bold text-gray-700 uppercase">{partyType} Name</label>
               <input 
                 type="text" 
                 value={partyName} 
                 onChange={(e) => setPartyName(e.target.value)} 
                 placeholder={`Enter ${partyType} Name...`} 
-                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
               />
             </div>
           </div>
@@ -209,7 +229,7 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {partyType === 'Employee' ? (
               <div className="flex flex-col gap-1 md:col-span-1">
-                <label className="text-xs font-semibold text-gray-500 uppercase">Designation</label>
+                <label className="text-xs font-bold text-gray-700 uppercase">Designation</label>
                 <Select
                   options={designationOptions}
                   value={selectedDesigOption}
@@ -219,7 +239,7 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
                   className="text-gray-900 text-sm"
                   styles={{
                     control: (base) => ({
-                      ...base, backgroundColor: '#f9fafb', borderColor: '#d1d5db', padding: '1px', borderRadius: '0.5rem', boxShadow: 'none', '&:hover': { borderColor: '#3b82f6' }
+                      ...base, backgroundColor: '#ffffff', borderColor: '#9ca3af', borderRadius: '0.25rem', boxShadow: 'none', '&:hover': { borderColor: '#3b82f6' }
                     })
                   }}
                 />
@@ -227,137 +247,111 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
             ) : (
               <>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Contact Number</label>
-                  <input type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="Phone/Mobile" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                  <label className="text-xs font-bold text-gray-700 uppercase">Contact Number</label>
+                  <input type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="Phone/Mobile" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">Address</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full Address" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                  <label className="text-xs font-bold text-gray-700 uppercase">Address</label>
+                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full Address" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-xs font-semibold text-gray-500 uppercase">GST Number</label>
-                  <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Optional" className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500" />
+                  <label className="text-xs font-bold text-gray-700 uppercase">GST Number</label>
+                  <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Optional" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                 </div>
               </>
             )}
           </div>
 
-          <div className="pt-2 flex gap-2">
+          <div className="flex gap-2">
             <button 
               type="submit" 
-              className={`flex-1 md:w-auto px-8 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-green-600 hover:bg-green-700 focus:ring-green-300'}`}
+              className={`px-8 py-2 text-white font-bold rounded shadow-sm transition-colors ${editingId ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'}`}
             >
-              {editingId ? `Update ${partyType}` : `+ Save ${partyType}`}
+              {editingId ? 'Update' : 'Save'}
             </button>
-            {editingId && (
-              <button 
-                type="button" 
-                onClick={cancelEdit}
-                className="px-6 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={cancelEdit}
+              className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded transition-colors"
+            >
+              Close
+            </button>
           </div>
-        </form>
-      </div>
-
-      {/* DATA DISPLAY SECTION */}
-      <div className="border-t border-gray-200">
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <span className="text-gray-500">🔍</span>
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search Parties by Name, Type, Role, or GST..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
-            />
-          </div>
+          </form>
         </div>
+      )}
 
-        {/* MOBILE VIEW */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {filteredParties.map((p) => (
-            <div key={p.PartyID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">{p.PartyName}</span>
-                <span className={`px-2.5 py-0.5 border rounded-full text-xs font-semibold ${getBadgeStyle(p.PartyType)}`}>
-                  {p.PartyType}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600">
-                {p.PartyType === 'Employee' 
-                  ? <p className="flex items-center gap-1"><span>💼</span> Role: <span className="font-semibold text-gray-800">{p.DesignationName}</span></p>
-                  : (
-                    <div className="flex flex-col gap-1 mt-2">
-                      <p className="flex items-center gap-1"><span>📞</span> {p.ContactNumber || 'N/A'}</p>
-                      <p className="flex items-center gap-1">
-                        <span>🏢</span> {p.GSTNumber ? <span className="font-mono text-xs font-semibold text-gray-800">{p.GSTNumber}</span> : 'No GST'}
-                      </p>
-                    </div>
-                  )
-                }
-              </div>
+      {/* DENSE TABULAR DATA DISPLAY */}
+      <div className="w-full overflow-x-auto">
+        <table className="w-full min-w-[800px] text-left text-sm text-gray-800">
+          <thead className="text-xs uppercase bg-slate-700 text-white">
+            <tr>
+              <th className="px-4 py-3 font-bold w-24 border-r border-slate-600">ID</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Type</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Name</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Details</th>
               {user?.role === 'Admin' && (
-                <div className="flex gap-2 mt-4 border-t border-gray-100 pt-3">
-                  <button onClick={() => handleEdit(p)} className="flex-1 p-2 bg-blue-50 text-blue-700 rounded-md font-bold text-xs hover:bg-blue-100 transition-colors">Edit</button>
-                  <button onClick={() => handleDelete(p.PartyID)} className="flex-1 p-2 bg-red-50 text-red-700 rounded-md font-bold text-xs hover:bg-red-100 transition-colors">Delete</button>
-                </div>
+                <>
+                  <th className="px-4 py-3 font-bold w-24 text-center border-r border-slate-600">Edit</th>
+                  <th className="px-4 py-3 font-bold w-24 text-center">Delete</th>
+                </>
               )}
-            </div>
-          ))}
-          {filteredParties.length === 0 && (
-             <div className="p-6 text-center text-gray-500">No records found matching your search.</div>
-          )}
-        </div>
-
-        {/* DESKTOP VIEW */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Type</th>
-                <th className="px-6 py-4 font-semibold">Name</th>
-                <th className="px-6 py-4 font-semibold">Details / GST</th>
-                {user?.role === 'Admin' && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredParties.map((p) => (
-                <tr key={p.PartyID} className="hover:bg-gray-50 transition-colors bg-white group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2.5 py-1 border rounded-full text-xs font-semibold ${getBadgeStyle(p.PartyType)}`}>
-                      {p.PartyType}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-300">
+            {filteredParties.map((party) => (
+              <tr key={party.PartyID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
+                <td className="px-4 py-2 font-mono text-gray-600 border-r border-gray-200">{party.PartyID}</td>
+                <td className="px-4 py-2 border-r border-gray-200">
+                  <span className={`px-2 py-0.5 border rounded text-xs font-semibold ${getBadgeStyle(party.PartyType)}`}>
+                    {party.PartyType}
+                  </span>
+                </td>
+                <td className="px-4 py-2 font-semibold text-gray-900 border-r border-gray-200">{party.PartyName}</td>
+                <td className="px-4 py-2 text-gray-700 border-r border-gray-200">
+                  {party.PartyType === 'Employee' ? (
+                    <span>Role: {party.DesignationName}</span>
+                  ) : (
+                    <span>
+                      {party.ContactNumber || 'N/A'}
+                      {party.Address && ` | ${party.Address}`}
+                      {party.GSTNumber ? ` | GST: ${party.GSTNumber}` : ' | No GST'}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 font-bold text-gray-900 whitespace-nowrap">{p.PartyName}</td>
-                  <td className="px-6 py-4">
-                    {p.PartyType === 'Employee' 
-                      ? <span className="font-semibold text-gray-800 bg-gray-100 px-2 py-1 rounded-md border border-gray-200">Role: {p.DesignationName}</span> 
-                      : <span className="text-gray-500">{p.ContactNumber || 'N/A'} <span className="mx-2 text-gray-300">|</span> {p.GSTNumber ? <span className="font-mono font-semibold text-gray-800">GST: {p.GSTNumber}</span> : 'No GST'}</span>}
-                  </td>
-                  {user?.role === 'Admin' && (
-                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                      <button onClick={() => handleEdit(p)} className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors">Edit</button>
-                      <button onClick={() => handleDelete(p.PartyID)} className="text-red-600 hover:text-red-800 font-semibold transition-colors">Delete</button>
-                    </td>
                   )}
-                </tr>
-              ))}
-              {filteredParties.length === 0 && (
-                <tr>
-                  <td colSpan={user?.role === 'Admin' ? 4 : 3} className="px-6 py-8 text-center text-gray-500">
-                    No records found matching your search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                </td>
+                {user?.role === 'Admin' && (
+                  <>
+                    <td className="px-4 py-2 text-center border-r border-gray-200">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(party)}
+                        className="font-bold text-blue-600 hover:text-blue-800 underline transition-colors"
+                      >
+                        Edit
+                      </button>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(party.PartyID)}
+                        className="font-bold text-red-600 hover:text-red-800 underline transition-colors"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </>
+                )}
+              </tr>
+            ))}
+            {filteredParties.length === 0 && (
+              <tr>
+                <td colSpan={user?.role === 'Admin' ? 6 : 4} className="px-4 py-8 text-center text-gray-500 font-medium">
+                  No records found matching your search.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );

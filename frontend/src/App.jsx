@@ -14,6 +14,8 @@ import SalesOrder from './components/SalesOrder';
 import SalesDispatch from './components/SalesDispatch';
 import Dashboard from './components/Dashboard';
 import UserManagement from './components/UserManagement';
+import ProductionEntry from './components/ProductionEntry';
+import RoleAllocation from './components/RoleAllocation';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('');

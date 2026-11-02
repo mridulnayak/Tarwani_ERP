@@ -103,6 +103,56 @@ app.post('/api/login', async (req, res) => {
 //to protect all routes
 app.use('/api', authenticateToken);
 
+// ==========================================
+// ROLE ALLOCATION & SECURITY ROUTES
+// ==========================================
+// Fetch all system users
+app.get('/api/users/roles', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        // Exclude passwords from the SELECT statement for security
+        const result = await pool.request().query(`
+            SELECT UserID, Username, FullName, Role, IsActive 
+            FROM mridul.Users
+            ORDER BY Role, Username
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error("Error fetching users:", err);
+        res.status(500).json({ error: 'Failed to fetch user roles' });
+    }
+});
+
+// Update a specific user's role (POST Tunneling bypass)
+app.post('/api/users/roles/edit/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { newRole } = req.body;
+
+        if (!newRole) {
+            return res.status(400).json({ error: 'New role is required' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.Int, id)
+            .input('role', sql.VarChar, newRole)
+            .query(`
+                UPDATE mridul.Users 
+                SET Role = @role 
+                WHERE UserID = @id
+            `);
+
+        if (result.rowsAffected[0] === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.status(200).json({ message: 'Role updated successfully' });
+    } catch (err) {
+        console.error("Error updating role:", err);
+        res.status(500).json({ error: 'Failed to update user role' });
+    }
+});
 
 // ==========================================
 // USER MANAGEMENT ROUTES (ADMIN ONLY)
@@ -354,48 +404,217 @@ app.post('/api/brands/delete/:id', async (req, res) => {
 });
 
 // ==========================================
+// PRODUCTION BATCH ENTRY ROUTES
+// ==========================================
+
+// 1. Load Pending Items for a specific Master Order
+app.get('/api/production/order/:orderNo', async (req, res) => {
+    try {
+        const { orderNo } = req.params;
+        const pool = await sql.connect(dbConfig);
+        
+        // Fetch Master Order
+        const orderResult = await pool.request()
+            .input('orderNo', sql.VarChar, orderNo)
+            .query(`SELECT * FROM mridul.ProductionOrders WHERE OrderNo = @orderNo`);
+            
+        if (orderResult.recordset.length === 0) {
+            return res.status(404).json({ error: 'Order not found' });
+        }
+        
+        const order = orderResult.recordset[0];
+
+        // Fetch Items linked to this order that are NOT fully completed
+        const itemsResult = await pool.request()
+            .input('orderId', sql.Int, order.OrderID)
+            .query(`
+                SELECT i.ItemID, i.ProductID, p.ProductName, i.QtyRequired, i.QtyCompleted, i.ItemStatus
+                FROM mridul.ProductionItems i
+                INNER JOIN mridul.ProductMaster p ON i.ProductID = p.ProductID
+                WHERE i.OrderID = @orderId AND i.ItemStatus = 'Pending'
+            `);
+
+        res.status(200).json({ order, items: itemsResult.recordset });
+    } catch (err) {
+        console.error("Error loading order:", err);
+        res.status(500).json({ error: 'Server error loading order' });
+    }
+});
+
+// 2. Generate Batch and Update Partial Fulfillments
+app.post('/api/production/batch/create', async (req, res) => {
+    try {
+        // Point 9 Implementation: Auto-logging the user from the JWT token
+        const processedBy = req.user ? req.user.username : 'UnknownUser';
+        const { OrderID, items } = req.body;
+        
+        if (!OrderID || !items || items.length === 0) {
+            return res.status(400).json({ error: 'Invalid batch data' });
+        }
+
+        // Generate a unique Batch No (e.g., BATCH-1704234567)
+        const batchNo = `BATCH-${Date.now()}`;
+        const pool = await sql.connect(dbConfig);
+        
+        // Start a SQL Transaction to ensure data integrity
+        const transaction = new sql.Transaction(pool);
+        await transaction.begin();
+
+        try {
+            const request = new sql.Request(transaction);
+            
+            for (const item of items) {
+                // A. Insert into ProductionBatches (The Execution Log)
+                await request
+                    .input('orderId_' + item.ItemID, sql.Int, OrderID)
+                    .input('batchNo_' + item.ItemID, sql.VarChar, batchNo)
+                    .input('productId_' + item.ItemID, sql.Int, item.ProductID)
+                    .input('qty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+                    .input('user_' + item.ItemID, sql.VarChar, processedBy)
+                    .query(`
+                        INSERT INTO mridul.ProductionBatches (OrderID, BatchNo, ProductID, QtyProduced, ProcessedBy)
+                        VALUES (@orderId_${item.ItemID}, @batchNo_${item.ItemID}, @productId_${item.ItemID}, @qty_${item.ItemID}, @user_${item.ItemID})
+                    `);
+
+                // B. Update QtyCompleted in the original ProductionItems list
+                await request
+                    .input('itemId_' + item.ItemID, sql.Int, item.ItemID)
+                    .input('addQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+                    .query(`
+                        UPDATE mridul.ProductionItems 
+                        SET QtyCompleted = QtyCompleted + @addQty_${item.ItemID},
+                            ItemStatus = CASE 
+                                WHEN (QtyCompleted + @addQty_${item.ItemID}) >= QtyRequired THEN 'Completed' 
+                                ELSE 'Pending' 
+                            END
+                        WHERE ItemID = @itemId_${item.ItemID}
+                    `);
+                    
+                // C. Update the Warehouse/Inventory (Add Finished Goods to ProductMaster)
+                await request
+                    .input('invProdId_' + item.ItemID, sql.Int, item.ProductID)
+                    .input('invQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+                    .query(`
+                        UPDATE mridul.ProductMaster
+                        SET ClosingBalance = ISNULL(ClosingBalance, 0) + @invQty_${item.ItemID}
+                        WHERE ProductID = @invProdId_${item.ItemID}
+                    `);
+            }
+
+            // D. Check if the entire Master Order is now completed
+            await request
+                .input('checkOrderId', sql.Int, OrderID)
+                .query(`
+                    UPDATE mridul.ProductionOrders
+                    SET Status = CASE 
+                        WHEN NOT EXISTS (SELECT 1 FROM mridul.ProductionItems WHERE OrderID = @checkOrderId AND ItemStatus = 'Pending') 
+                        THEN 'Completed' 
+                        ELSE 'Partial' 
+                    END
+                    WHERE OrderID = @checkOrderId
+                `);
+
+            await transaction.commit();
+            res.status(201).json({ message: 'Batch Generated', batchNo });
+            
+        } catch (txnErr) {
+            await transaction.rollback();
+            throw txnErr;
+        }
+    } catch (err) {
+        console.error("Batch creation failed:", err);
+        res.status(500).json({ error: 'Failed to generate batch' });
+    }
+});
+
+// ==========================================
 // PRODUCT MASTER ROUTES
 // ==========================================
+
+// Create a new product (CREATE)
 app.post('/api/products', async (req, res) => {
     try {
-        const { productName, brandId } = req.body;
-        if (!productName || !brandId) return res.status(400).json({ error: 'Name and Brand are required' });
+        // Extract the 3 new fields from the frontend request
+        const { productName, brandId, materialType, itemState, unitOfMeasure } = req.body;
+        
+        if (!productName || !brandId) {
+            return res.status(400).json({ error: 'Name and Brand are required' });
+        }
 
         const pool = await sql.connect(dbConfig);
         await pool.request()
             .input('name', sql.VarChar, productName)
             .input('brandId', sql.Int, brandId)
-            .query('INSERT INTO mridul.ProductMaster (ProductName, BrandID) VALUES (@name, @brandId)');
+            .input('materialType', sql.VarChar, materialType || 'Finished Good')
+            .input('itemState', sql.VarChar, itemState || 'Solid')
+            .input('uom', sql.VarChar, unitOfMeasure || 'Pcs')
+            .query(`
+                INSERT INTO mridul.ProductMaster 
+                (ProductName, BrandID, MaterialType, ItemState, UnitOfMeasure) 
+                VALUES (@name, @brandId, @materialType, @itemState, @uom)
+            `);
+            
         res.status(201).json({ message: 'Product created successfully!' });
-    } catch (err) { res.status(500).json({ error: 'Failed to create product' }); }
+    } catch (err) { 
+        console.error('Error creating product:', err);
+        res.status(500).json({ error: 'Failed to create product' }); 
+    }
 });
 
+// Fetch all products (READ)
 app.get('/api/products', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
+        // Added the 3 new columns to the SELECT statement
+        // Changed to LEFT JOIN to prevent products from disappearing if a brand is deleted
         const result = await pool.request().query(`
-            SELECT p.ProductID, p.ProductName, p.ClosingBalance, b.BrandName 
+            SELECT 
+                p.ProductID, 
+                p.ProductName, 
+                p.ClosingBalance, 
+                p.BrandID, 
+                b.BrandName,
+                p.MaterialType,
+                p.ItemState,
+                p.UnitOfMeasure
             FROM mridul.ProductMaster p
-            INNER JOIN mridul.BrandMaster b ON p.BrandID = b.BrandID
+            LEFT JOIN mridul.BrandMaster b ON p.BrandID = b.BrandID
         `);
         res.status(200).json(result.recordset);
-    } catch (err) { res.status(500).json({ error: 'Failed to fetch products' }); }
+    } catch (err) { 
+        console.error('Error fetching products:', err);
+        res.status(500).json({ error: 'Failed to fetch products' }); 
+    }
 });
 
 // Update an existing product (EDIT)
 app.post('/api/products/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { productName, brandId } = req.body;
+        // Extract the 3 new fields
+        const { productName, brandId, materialType, itemState, unitOfMeasure } = req.body;
         
-        if (!productName || !brandId) return res.status(400).json({ error: 'Name and Brand are required' });
+        if (!productName || !brandId) {
+            return res.status(400).json({ error: 'Name and Brand are required' });
+        }
 
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
             .input('id', sql.Int, id)
             .input('name', sql.VarChar, productName)
             .input('brandId', sql.Int, brandId)
-            .query('UPDATE mridul.ProductMaster SET ProductName = @name, BrandID = @brandId WHERE ProductID = @id');
+            .input('materialType', sql.VarChar, materialType || 'Finished Good')
+            .input('itemState', sql.VarChar, itemState || 'Solid')
+            .input('uom', sql.VarChar, unitOfMeasure || 'Pcs')
+            .query(`
+                UPDATE mridul.ProductMaster 
+                SET ProductName = @name, 
+                    BrandID = @brandId,
+                    MaterialType = @materialType,
+                    ItemState = @itemState,
+                    UnitOfMeasure = @uom
+                WHERE ProductID = @id
+            `);
         
         if (result.rowsAffected[0] === 0) {
             return res.status(404).json({ error: 'Product not found' });
@@ -403,11 +622,12 @@ app.post('/api/products/edit/:id', async (req, res) => {
         
         res.status(200).json({ message: 'Product updated successfully!' });
     } catch (err) { 
+        console.error('Error updating product:', err);
         res.status(500).json({ error: 'Failed to update product' }); 
     }
 });
 
-// Delete a product (DELETE)
+// Delete a product (DELETE) - No schema changes needed, but preserved POST Tunneling
 app.post('/api/products/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -423,7 +643,7 @@ app.post('/api/products/delete/:id', async (req, res) => {
         
         res.status(200).json({ message: 'Product deleted successfully!' });
     } catch (err) { 
-        // Handles Foreign Key constraint errors if the product is already used in active orders
+        console.error('Error deleting product:', err);
         res.status(500).json({ error: 'Failed to delete product. It may be linked to existing production or sales orders.' }); 
     }
 });
@@ -598,9 +818,12 @@ app.post('/api/parties/delete/:id', async (req, res) => {
 // PURCHASE ORDER ROUTES
 // ==========================================
 
-// 1. POST: Create a Purchase Order
+// 1. POST: Create a Purchase Order (Point 9: Auto-Logging User)
 app.post('/api/purchase-orders', async (req, res) => {
     const { vendorId, items } = req.body; 
+    
+    // Extract secure username from JWT middleware, fallback to SystemAdmin if missing
+    const loggedInUser = req.user ? req.user.username : 'SystemAdmin';
     
     if (!vendorId || !items || items.length === 0) {
         return res.status(400).json({ error: 'Vendor and at least one item are required' });
@@ -618,21 +841,25 @@ app.post('/api/purchase-orders', async (req, res) => {
         const headerResult = await headerReq
             .input('poNumber', sql.VarChar, poNumber)
             .input('vendorId', sql.Int, vendorId)
+            .input('receivedBy', sql.VarChar, loggedInUser) // 🚨 AUTO-LOGGED IDENTITY
             .query(`
-                INSERT INTO mridul.PurchaseOrderHeader (PONumber, VendorID, Status) 
+                INSERT INTO mridul.PurchaseOrderHeader (PONumber, VendorID, Status, ReceivedBy) 
                 OUTPUT INSERTED.PO_ID 
-                VALUES (@poNumber, @vendorId, 'Pending')
+                VALUES (@poNumber, @vendorId, 'Pending', @receivedBy)
             `);
         
         const newPoId = headerResult.recordset[0].PO_ID; 
 
         for (const item of items) {
+            // Safety check against negative quantities injected via API
+            const safeQty = Math.max(1, parseInt(item.quantity) || 1);
+            
             const detailReq = new sql.Request(transaction);
             await detailReq
                 .input('poId', sql.Int, newPoId)
                 .input('productId', sql.Int, item.productId)
-                .input('qty', sql.Int, item.quantity)
-                .input('rate', sql.Decimal(10, 2), item.rate)
+                .input('qty', sql.Int, safeQty)
+                .input('rate', sql.Decimal(10, 2), item.rate || 0)
                 .query(`
                     INSERT INTO mridul.PurchaseOrderDetails (PO_ID, ProductID, Quantity, Rate) 
                     VALUES (@poId, @productId, @qty, @rate)
@@ -643,7 +870,6 @@ app.post('/api/purchase-orders', async (req, res) => {
         res.status(201).json({ message: 'Purchase Order created successfully!', poNumber });
 
     } catch (err) {
-        // Enterprise Safe Rollback
         try { await transaction.rollback(); } catch (rollbackErr) { console.error(rollbackErr); }
         console.error('PO Transaction Failed:', err);
         res.status(500).json({ error: 'Failed to generate Purchase Order' });

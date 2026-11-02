@@ -1,20 +1,23 @@
 import { useState, useEffect } from 'react';
-import Select from 'react-select'; // Import the searchable dropdown
+import Select from 'react-select';
 
 export default function ProductMaster({ user }) {
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]);
   
-  // Form State
+  // Form State (Upgraded with new business fields)
   const [productName, setProductName] = useState('');
   const [brandId, setBrandId] = useState(null);
+  const [materialType, setMaterialType] = useState('Finished Good');
+  const [itemState, setItemState] = useState('Solid');
+  const [unitOfMeasure, setUnitOfMeasure] = useState('Pcs');
   
   // Enterprise Features State
   const [searchTerm, setSearchTerm] = useState('');
-  const [editingId, setEditingId] = useState(null); // Tracks if we are editing an existing item
+  const [editingId, setEditingId] = useState(null);
+  const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchData = async () => {
-    // 1. Fetch Products Safely
     try {
       const token = localStorage.getItem('erp_token');
       const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
@@ -29,7 +32,6 @@ export default function ProductMaster({ user }) {
       setProducts([]);
     }
 
-    // 2. Fetch Brands Safely (Independent try/catch block)
     try {
       const token = localStorage.getItem('erp_token');
       const bRes = await fetch('https://sms.uvtechsolutions.co.in/api/brands', {
@@ -47,13 +49,11 @@ export default function ProductMaster({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Format brands for react-select: { value, label }
   const brandOptions = brands.map(b => ({
     value: b.BrandID,
     label: b.BrandName
   }));
 
-  // Find the selected option object for the react-select component
   const selectedBrandOption = brandOptions.find(opt => opt.value === brandId) || null;
 
   const handleSubmit = async (e) => {
@@ -61,7 +61,6 @@ export default function ProductMaster({ user }) {
     if (!productName || !brandId) return alert("Select a brand and enter a product name");
     
     const method = 'POST';
-    // UPDATED TO ABSOLUTE URLS FOR MOBILE
     const url = editingId 
       ? `https://sms.uvtechsolutions.co.in/api/products/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/products';
@@ -72,15 +71,20 @@ export default function ProductMaster({ user }) {
         method: method,
         headers: { 
           'Content-Type': 'application/json',
-          'x-access-token': token // TOKEN ADDED HERE
+          'x-access-token': token 
         },
-        body: JSON.stringify({ productName, brandId })
+        // Payload now includes the new inventory routing fields
+        body: JSON.stringify({ 
+          productName, 
+          brandId, 
+          materialType, 
+          itemState, 
+          unitOfMeasure 
+        })
       });
       
       if (res.ok) { 
-        setProductName(''); 
-        setBrandId(null); 
-        setEditingId(null);
+        cancelEdit();
         fetchData(); 
       } else {
         alert("Failed to save product.");
@@ -93,8 +97,12 @@ export default function ProductMaster({ user }) {
   const handleEdit = (product) => {
     setProductName(product.ProductName);
     setBrandId(product.BrandID);
+    setMaterialType(product.MaterialType || 'Finished Good');
+    setItemState(product.ItemState || 'Solid');
+    setUnitOfMeasure(product.UnitOfMeasure || 'Pcs');
     setEditingId(product.ProductID);
-    window.scrollTo({ top: 0, behavior: 'smooth' }); // Scroll to top to see the form
+    setIsFormVisible(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDelete = async (id) => {
@@ -104,7 +112,7 @@ export default function ProductMaster({ user }) {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/delete/${id}`, {
         method: 'POST',
-        headers: { 'x-access-token': token } // TOKEN ADDED HERE
+        headers: { 'x-access-token': token }
       });
       if (res.ok) {
         fetchData();
@@ -119,186 +127,191 @@ export default function ProductMaster({ user }) {
   const cancelEdit = () => {
     setProductName('');
     setBrandId(null);
+    setMaterialType('Finished Good');
+    setItemState('Solid');
+    setUnitOfMeasure('Pcs');
     setEditingId(null);
+    setIsFormVisible(false);
   };
 
-  // Filter products based on search term
   const filteredProducts = products.filter(p => 
     p.ProductName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.BrandName.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.BrandName && p.BrandName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (p.MaterialType && p.MaterialType.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">
-          {editingId ? 'Edit Product' : 'Product / Box Master'}
+    <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
+      
+      {/* ENTERPRISE TOOLBAR */}
+      <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
+        <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
+          Product & Material Master
         </h2>
-        {editingId && (
-          <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-3 py-1 rounded-full border border-yellow-200">
-            Editing Mode Active
-          </span>
-        )}
+        
+        <div className="flex w-full md:w-auto gap-3">
+          <input
+            type="search"
+            placeholder="Search name, brand, or type..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+          />
+          {!isFormVisible && (
+            <button
+              type="button"
+              onClick={() => setIsFormVisible(true)}
+              className="whitespace-nowrap px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
+            >
+              + Create New
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* FORM SECTION */}
-      <div className="p-5 md:p-6 bg-white">
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-          
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Product Name</label>
-            <input 
-              type="text" 
-              value={productName} 
-              onChange={(e) => setProductName(e.target.value)} 
-              placeholder="e.g., Mitan Black 10/-" 
-              className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-colors" 
-            />
-          </div>
+      {/* DATA ENTRY FORM */}
+      {isFormVisible && (
+        <div className="p-5 bg-blue-50 border-b border-blue-200">
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Material Type</label>
+                <select 
+                  value={materialType} 
+                  onChange={(e) => setMaterialType(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="Finished Good">Finished Good (For Sale)</option>
+                  <option value="Raw Material">Raw Material (For Production)</option>
+                  <option value="Packaging">Packaging Material</option>
+                </select>
+              </div>
 
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Brand</label>
-            {/* Enterprise Searchable Dropdown */}
-            <Select
-              options={brandOptions}
-              value={selectedBrandOption}
-              onChange={(selected) => setBrandId(selected ? selected.value : null)}
-              isClearable
-              placeholder="Search brand..."
-              className="text-gray-900 text-sm"
-              styles={{
-                control: (base) => ({
-                  ...base,
-                  backgroundColor: '#f9fafb',
-                  borderColor: '#d1d5db',
-                  padding: '1px',
-                  borderRadius: '0.5rem',
-                  boxShadow: 'none',
-                  '&:hover': { borderColor: '#3b82f6' }
-                })
-              }}
-            />
-          </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Item State (Routing)</label>
+                <select 
+                  value={itemState} 
+                  onChange={(e) => setItemState(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="Solid">Solid (Warehouse Storage)</option>
+                  <option value="Liquid">Liquid (Tank Storage)</option>
+                </select>
+              </div>
 
-          <div className="md:col-span-1 flex gap-2">
-            <button 
-              type="submit" 
-              className={`flex-1 px-4 py-2.5 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 ${editingId ? 'bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-300' : 'bg-green-600 hover:bg-green-700 focus:ring-green-300'}`}
-            >
-              {editingId ? 'Update' : '+ Save'}
-            </button>
-            {editingId && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Unit of Measure</label>
+                <select 
+                  value={unitOfMeasure} 
+                  onChange={(e) => setUnitOfMeasure(e.target.value)}
+                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="Pcs">Pieces (Pcs)</option>
+                  <option value="Box">Boxes (Box)</option>
+                  <option value="Kg">Kilograms (Kg)</option>
+                  <option value="Liters">Liters (L)</option>
+                  <option value="Tons">Tons (T)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Brand Assignment</label>
+                <Select
+                  options={brandOptions}
+                  value={selectedBrandOption}
+                  onChange={(selected) => setBrandId(selected ? selected.value : null)}
+                  isClearable
+                  placeholder="Select a brand..."
+                  className="text-gray-900 text-sm"
+                  styles={{
+                    control: (base) => ({
+                      ...base, minHeight: '38px', borderColor: '#9ca3af', borderRadius: '0.25rem'
+                    })
+                  }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">Product / Material Name</label>
+                <input 
+                  type="text" 
+                  value={productName} 
+                  onChange={(e) => setProductName(e.target.value)} 
+                  placeholder="Enter name..." 
+                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" 
+                />
+              </div>
+            </div>
+
+            <div className="w-full flex gap-2 pt-2 border-t border-blue-200 mt-2">
+              <button 
+                type="submit" 
+                className={`px-8 py-2 text-white font-bold rounded shadow-sm transition-colors ${editingId ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                {editingId ? 'Update Record' : 'Save Record'}
+              </button>
               <button 
                 type="button" 
                 onClick={cancelEdit}
-                className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold rounded-lg transition-colors"
+                className="px-6 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold rounded transition-colors"
               >
                 Cancel
               </button>
-            )}
-          </div>
-        </form>
-      </div>
-
-      {/* DATA DISPLAY SECTION */}
-      <div className="border-t border-gray-200">
-        
-        {/* GLOBAL SEARCH BAR */}
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <span className="text-gray-400">🔍</span>
             </div>
-            <input 
-              type="text" 
-              placeholder="Search products by name or brand..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm transition-all"
-            />
-          </div>
+          </form>
         </div>
+      )}
 
-        {/* MOBILE VIEW: Cards */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {filteredProducts.map((p) => (
-            <div key={p.ProductID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">{p.ProductName}</span>
-                <span className="text-xs font-mono text-gray-400">#{p.ProductID}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600 flex items-center gap-2">
-                  <span>🏷️</span> <span className="font-semibold text-gray-800">{p.BrandName}</span>
-                </p>
-                {/* Admin Actions Mobile */}
+      {/* DENSE TABULAR DATA DISPLAY */}
+      <div className="w-full overflow-x-auto">
+        <table className="w-full text-left text-sm text-gray-800 min-w-[800px]">
+          <thead className="text-xs uppercase bg-slate-700 text-white">
+            <tr>
+              <th className="px-4 py-3 font-bold w-16 border-r border-slate-600">ID</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600">Name</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600 w-32">Brand</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600 w-40">Type</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600 w-24">State</th>
+              <th className="px-4 py-3 font-bold border-r border-slate-600 w-24">UOM</th>
+              {user?.role === 'Admin' && (
+                <th className="px-4 py-3 font-bold text-center w-32">Actions</th>
+              )}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-300">
+            {filteredProducts.map((p) => (
+              <tr key={p.ProductID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
+                <td className="px-4 py-2 font-mono text-gray-600 border-r border-gray-200">{p.ProductID}</td>
+                <td className="px-4 py-2 font-bold text-gray-900 border-r border-gray-200">{p.ProductName}</td>
+                <td className="px-4 py-2 border-r border-gray-200">{p.BrandName || 'N/A'}</td>
+                <td className="px-4 py-2 border-r border-gray-200">
+                  <span className={`px-2 py-0.5 rounded text-xs font-bold ${p.MaterialType === 'Raw Material' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                    {p.MaterialType || 'Finished Good'}
+                  </span>
+                </td>
+                <td className="px-4 py-2 border-r border-gray-200 font-semibold">{p.ItemState || 'Solid'}</td>
+                <td className="px-4 py-2 border-r border-gray-200 font-semibold">{p.UnitOfMeasure || 'Pcs'}</td>
+                
                 {user?.role === 'Admin' && (
-                  <div className="flex gap-2">
-                    <button onClick={() => handleEdit(p)} className="p-1.5 bg-blue-100 text-blue-700 rounded-md font-bold text-xs">Edit</button>
-                    <button onClick={() => handleDelete(p.ProductID)} className="p-1.5 bg-red-100 text-red-700 rounded-md font-bold text-xs">Del</button>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-          {filteredProducts.length === 0 && (
-             <div className="p-6 text-center text-gray-500">No products found.</div>
-          )}
-        </div>
-
-        {/* DESKTOP VIEW: Table */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold w-24">ID</th>
-                <th className="px-6 py-4 font-semibold">Product Name</th>
-                <th className="px-6 py-4 font-semibold">Brand</th>
-                {user?.role === 'Admin' && (
-                  <th className="px-6 py-4 font-semibold text-right">Actions</th>
+                  <td className="px-4 py-2 text-center whitespace-nowrap">
+                    <button onClick={() => handleEdit(p)} className="font-bold text-blue-600 hover:text-blue-800 underline mr-3">Edit</button>
+                    <button onClick={() => handleDelete(p.ProductID)} className="font-bold text-red-600 hover:text-red-800 underline">Delete</button>
+                  </td>
                 )}
               </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {filteredProducts.map((p) => (
-                <tr key={p.ProductID} className="hover:bg-gray-50 transition-colors bg-white group">
-                  <td className="px-6 py-4 font-mono text-gray-500">{p.ProductID}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900">{p.ProductName}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-2.5 py-1 bg-gray-100 border border-gray-200 rounded-md text-xs font-semibold text-gray-700">
-                      {p.BrandName}
-                    </span>
-                  </td>
-                  {/* Admin Actions Desktop */}
-                  {user?.role === 'Admin' && (
-                    <td className="px-6 py-4 text-right opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleEdit(p)}
-                        className="text-blue-600 hover:text-blue-800 font-semibold mr-4 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button 
-                        onClick={() => handleDelete(p.ProductID)}
-                        className="text-red-600 hover:text-red-800 font-semibold transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-              {filteredProducts.length === 0 && (
-                <tr>
-                  <td colSpan={user?.role === 'Admin' ? 4 : 3} className="px-6 py-8 text-center text-gray-500">
-                    No products found matching your search.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {filteredProducts.length === 0 && (
+              <tr>
+                <td colSpan={user?.role === 'Admin' ? 7 : 6} className="px-4 py-8 text-center text-gray-500 font-medium">
+                  No records found matching your criteria.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
