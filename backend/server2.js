@@ -958,13 +958,12 @@ app.post('/api/purchase-orders/delete/:id', async (req, res) => {
 // PURCHASE RECEIVING & INVENTORY ROUTES
 // ==========================================
 
-// 1. POST: Process Received Goods and Update Tank Stock
-app.post('/api/purchase-receiving', async (req, res) => {
-    const { poId, productId, tankId, receivedQty, receivedBy } = req.body;
+// 1. POST: Process Received Goods (GRN), Update Inventory & Tank Stock
+app.post('/api/purchase-receivings', async (req, res) => {
+    const { vendorId, invoiceNo, vehicleNo, items } = req.body;
 
-    // Strict validation to prevent negative or zero receipts
-    if (!poId || !productId || !tankId || !receivedQty || receivedQty <= 0) {
-        return res.status(400).json({ error: 'Valid PO, Product, Tank, and a positive Received Quantity are required.' });
+    if (!vendorId || !items || items.length === 0) {
+        return res.status(400).json({ error: 'Vendor and at least one received item are required.' });
     }
 
     const pool = await sql.connect(dbConfig);
@@ -972,74 +971,79 @@ app.post('/api/purchase-receiving', async (req, res) => {
 
     try {
         await transaction.begin(); 
+        const grnNumber = `GRN-${Date.now()}`;
 
-        // Step 1: Update PO Status FIRST (Double-Entry Protection)
-        // If it's already 'Received', rowsAffected will be 0, stopping the transaction.
-        const statusReq = new sql.Request(transaction);
-        const statusResult = await statusReq
-            .input('poId', sql.Int, poId)
-            .query(`
-                UPDATE mridul.PurchaseOrderHeader 
-                SET Status = 'Received' 
-                WHERE PO_ID = @poId AND Status = 'Pending'
-            `);
+        // Loop through each item in the truck/delivery
+        for (const item of items) {
+            const { productId, quantity, requiresTank, tankId } = item;
 
-        if (statusResult.rowsAffected[0] === 0) {
-            throw new Error('ALREADY_RECEIVED');
-        }
+            // Step 1: Log the Receiving Entry
+            const receiptReq = new sql.Request(transaction);
+            await receiptReq
+                .input('grn', sql.VarChar, grnNumber)
+                .input('vendorId', sql.Int, vendorId)
+                .input('productId', sql.Int, productId)
+                .input('tankId', sql.Int, requiresTank ? tankId : null)
+                .input('qty', sql.Int, quantity)
+                .input('invoiceNo', sql.VarChar, invoiceNo || '')
+                .input('vehicleNo', sql.VarChar, vehicleNo || '')
+                .query(`
+                    INSERT INTO mridul.PurchaseReceiving (GRN_Number, VendorID, ProductID, TankID, ReceivedQty, InvoiceNo, VehicleNo, ReceiveDate)
+                    VALUES (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE())
+                `);
 
-        // Step 2: Log the Receiving Entry
-        const receiptReq = new sql.Request(transaction);
-        await receiptReq
-            .input('poId', sql.Int, poId)
-            .input('productId', sql.Int, productId)
-            .input('tankId', sql.Int, tankId)
-            .input('qty', sql.Int, receivedQty)
-            .input('receivedBy', sql.VarChar, receivedBy || 'Store Admin')
-            .query(`
-                INSERT INTO mridul.PurchaseReceiving (PO_ID, ProductID, TankID, ReceivedQty, ReceivedBy)
-                VALUES (@poId, @productId, @tankId, @qty, @receivedBy)
-            `);
+            // Step 2: Update Main Warehouse Inventory (ClosingBalance)
+            const inventoryReq = new sql.Request(transaction);
+            await inventoryReq
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
+                .query(`
+                    UPDATE mridul.ProductMaster 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty 
+                    WHERE ProductID = @productId
+                `);
 
-        // Step 3: Add to Tank WITH Overfill Protection
-        const tankReq = new sql.Request(transaction);
-        const tankResult = await tankReq
-            .input('tankId', sql.Int, tankId)
-            .input('qty', sql.Int, receivedQty)
-            .query(`
-                UPDATE mridul.TankMaster 
-                SET CurrentStock = ISNULL(CurrentStock, 0) + @qty 
-                OUTPUT INSERTED.CurrentStock, INSERTED.Capacity, INSERTED.TankName
-                WHERE TankID = @tankId
-            `);
+            // Step 3: If it's a Liquid going into a Tank, update the Tank WITH Overfill Protection
+            if (requiresTank && tankId) {
+                const tankReq = new sql.Request(transaction);
+                const tankResult = await tankReq
+                    .input('tankId', sql.Int, tankId)
+                    .input('qty', sql.Int, quantity)
+                    .query(`
+                        UPDATE mridul.TankMaster 
+                        SET CurrentStock = ISNULL(CurrentStock, 0) + @qty 
+                        OUTPUT INSERTED.CurrentStock, INSERTED.Capacity, INSERTED.TankName
+                        WHERE TankID = @tankId
+                    `);
 
-        // Check if we just exceeded the physical capacity of the tank
-        if (tankResult.recordset.length > 0) {
-            const { CurrentStock, Capacity, TankName } = tankResult.recordset[0];
-            if (CurrentStock > Capacity) {
-                throw new Error(`OVERFILL:${TankName}:${Capacity}`);
+                // Evaluate Overfill Protection
+                if (tankResult.recordset.length > 0) {
+                    const { CurrentStock, Capacity, TankName } = tankResult.recordset[0];
+                    if (CurrentStock > Capacity) {
+                        // Throwing an error here triggers the rollback for the ENTIRE truckload
+                        throw new Error(`OVERFILL:${TankName}:${Capacity}`);
+                    }
+                }
             }
         }
 
+        // If all items pass successfully, commit everything to the database
         await transaction.commit(); 
-        res.status(201).json({ message: 'Goods received and tank stock updated successfully!' });
+        res.status(201).json({ message: 'Goods received, inventory, and tank stock updated successfully!' });
 
     } catch (err) {
-        // Safe Rollback
-        try { await transaction.rollback(); } catch (rollbackErr) { console.error(rollbackErr); }
+        // Safe Rollback - If even one tank overfills, the whole GRN is cancelled
+        try { await transaction.rollback(); } catch (rollbackErr) { console.error("Rollback failed:", rollbackErr); }
         
         console.error('Receiving Transaction Failed:', err.message || err);
 
         // Friendly UI Errors
-        if (err.message === 'ALREADY_RECEIVED') {
-            return res.status(400).json({ error: 'This Purchase Order has already been received.' });
-        }
         if (err.message && err.message.startsWith('OVERFILL')) {
             const [_, tankName, capacity] = err.message.split(':');
             return res.status(400).json({ error: `Cannot receive items. This will overfill ${tankName} (Max Capacity: ${capacity}L).` });
         }
 
-        res.status(500).json({ error: 'Failed to process receiving' });
+        res.status(500).json({ error: 'Failed to process receiving and update stock.' });
     }
 });
 
