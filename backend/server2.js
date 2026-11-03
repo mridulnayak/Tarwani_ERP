@@ -1044,21 +1044,25 @@ app.post('/api/purchase-receiving', async (req, res) => {
 });
 
 // ==========================================
-// PRODUCTION ORDER ROUTES (CORRECTED SCHEMA)
+// PRODUCTION ORDER ROUTES (FIXED)
 // ==========================================
 
-// 1. GET: Fetch all Production Orders
+// 1. GET: Fetch all Production Orders with Product Name & Target Qty
 app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT 
-                OrderID, 
-                OrderNo,
-                ISNULL(OrderDate, GETDATE()) AS OrderDate, 
-                ISNULL(Status, 'Pending') AS Status
-            FROM mridul.ProductionOrders
-            ORDER BY OrderID DESC
+                po.ProductionOrderID, 
+                ISNULL(po.OrderNo, 'PRD-' + CAST(po.ProductionOrderID AS VARCHAR)) AS OrderNo,
+                ISNULL(po.OrderDate, GETDATE()) AS OrderDate, 
+                ISNULL(po.Status, 'Pending') AS Status,
+                ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
+                po.ProductID,
+                ISNULL(p.ProductName, 'Unknown Product') AS ProductName
+            FROM mridul.ProductionOrder po
+            LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
+            ORDER BY po.ProductionOrderID DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
@@ -1067,17 +1071,26 @@ app.get('/api/production-orders', async (req, res) => {
     }
 });
 
-// 2. POST: Create Production Order
+// 2. POST: Create Production Order (Saving ProductID & TargetQuantity properly)
 app.post('/api/production-orders', async (req, res) => {
     try {
+        const { productId, targetQuantity, salesOrderRef } = req.body;
+
+        if (!productId || !targetQuantity) {
+            return res.status(400).json({ error: 'Product and Target Quantity are required' });
+        }
+
         const pool = await sql.connect(dbConfig);
         const orderNo = `PRD-${Date.now()}`;
-        
+
         await pool.request()
             .input('orderNo', sql.VarChar, orderNo)
+            .input('productId', sql.Int, productId)
+            .input('targetQty', sql.Int, targetQuantity)
+            .input('salesRef', sql.VarChar, salesOrderRef || null)
             .query(`
-                INSERT INTO mridul.ProductionOrders (OrderNo, Status, OrderDate)
-                VALUES (@orderNo, 'Pending', GETDATE())
+                INSERT INTO mridul.ProductionOrder (OrderNo, ProductID, TargetQuantity, SalesOrderRef, Status, OrderDate)
+                VALUES (@orderNo, @productId, @targetQty, @salesRef, 'Pending', GETDATE())
             `);
 
         res.status(201).json({ message: 'Production Order generated successfully!' });
@@ -1086,30 +1099,29 @@ app.post('/api/production-orders', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// 3. POST: Delete/Cancel Production Order
-app.post('/api/production-orders/delete/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const pool = await sql.connect(dbConfig);
+// // 3. POST: Delete/Cancel Production Order
+// app.post('/api/production-orders/delete/:id', async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const pool = await sql.connect(dbConfig);
         
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .query(`
-                DELETE FROM mridul.ProductionOrders 
-                WHERE OrderID = @id
-            `);
+//         const result = await pool.request()
+//             .input('id', sql.Int, id)
+//             .query(`
+//                 DELETE FROM mridul.ProductionOrders 
+//                 WHERE OrderID = @id
+//             `);
         
-        if (result.rowsAffected[0] === 0) {
-            return res.status(404).json({ error: 'Production Order not found.' });
-        }
+//         if (result.rowsAffected[0] === 0) {
+//             return res.status(404).json({ error: 'Production Order not found.' });
+//         }
 
-        res.status(200).json({ message: 'Production Order deleted successfully.' });
-    } catch (err) {
-        console.error('SQL Error in DELETE production order:', err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
+//         res.status(200).json({ message: 'Production Order deleted successfully.' });
+//     } catch (err) {
+//         console.error('SQL Error in DELETE production order:', err.message);
+//         res.status(500).json({ error: err.message });
+//     }
+// });
 
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES

@@ -9,7 +9,6 @@ export default function ProductionOrder({ user }) {
   // Form State
   const [productId, setProductId] = useState('');
   const [targetQuantity, setTargetQuantity] = useState(1);
-  const [salesOrderRef, setSalesOrderRef] = useState('');
   
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormVisible, setIsFormVisible] = useState(false);
@@ -54,17 +53,20 @@ export default function ProductionOrder({ user }) {
           'Content-Type': 'application/json',
           'x-access-token': token 
         },
-        body: JSON.stringify({ productId, targetQuantity, salesOrderRef })
+        body: JSON.stringify({ 
+          productId: parseInt(productId), 
+          targetQuantity: parseInt(targetQuantity) 
+        })
       });
       
       if (res.ok) {
         setProductId('');
         setTargetQuantity(1);
-        setSalesOrderRef('');
         setIsFormVisible(false);
         fetchData(); 
       } else {
-        alert("Failed to generate Production Order.");
+        const err = await res.json();
+        alert(`Failed to generate Production Order: ${err.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Error submitting production order:", error);
@@ -85,7 +87,7 @@ export default function ProductionOrder({ user }) {
     doc.setFontSize(11);
     doc.setTextColor(40, 40, 40);
     doc.text(`Order Date: ${new Date(order.OrderDate || Date.now()).toLocaleDateString()}`, 14, 42);
-    doc.text(`Production Order No: ${order.OrderNo || 'PRD-' + order.OrderID}`, 14, 49);
+    doc.text(`Production Order No: ${order.OrderNo}`, 14, 49);
     doc.text(`Status: ${order.Status || 'Pending'}`, 14, 56);
 
     autoTable(doc, {
@@ -101,7 +103,7 @@ export default function ProductionOrder({ user }) {
     doc.text("Plant Manager Signature", 130, finalY);
     doc.line(125, finalY - 5, 190, finalY - 5);
 
-    doc.save(`ProductionOrder_${order.OrderNo || order.OrderID}.pdf`);
+    doc.save(`ProductionOrder_${order.OrderNo}.pdf`);
   };
 
   const filteredOrders = (productionOrders || []).filter(po => 
@@ -207,22 +209,22 @@ export default function ProductionOrder({ user }) {
           </thead>
           <tbody className="divide-y divide-gray-300">
             {filteredOrders.map((po) => (
-              <tr key={po.OrderID || po.ProductionOrderID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
+              <tr key={po.ProductionOrderID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
                 <td className="px-4 py-2 font-mono font-bold text-blue-600 border-r border-gray-200">
-                  {po.OrderNo || `PRD-${po.ProductionOrderID}`}
+                  {po.OrderNo}
                 </td>
                 <td className="px-4 py-2 text-gray-600 border-r border-gray-200">
-                  {new Date(po.OrderDate || Date.now()).toLocaleDateString()}
+                  {new Date(po.OrderDate).toLocaleDateString()}
                 </td>
                 <td className="px-4 py-2 font-semibold text-gray-900 border-r border-gray-200">
-                  {po.ProductName || 'N/A'}
+                  {po.ProductName}
                 </td>
                 <td className="px-4 py-2 font-mono font-bold text-right text-gray-800 border-r border-gray-200">
                   {po.TargetQuantity} Units
                 </td>
                 <td className="px-4 py-2 border-r border-gray-200">
                   <span className={`px-2 py-0.5 rounded text-xs font-bold ${po.Status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                    {po.Status || 'Pending'}
+                    {po.Status}
                   </span>
                 </td>
                 <td className="px-4 py-2 text-center">
