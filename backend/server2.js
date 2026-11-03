@@ -1047,13 +1047,14 @@ app.post('/api/purchase-receiving', async (req, res) => {
 // PRODUCTION ORDER ROUTES
 // ==========================================
 
-// 1. GET: Fetch all Production Orders with Product Details & IDs
+// 1. GET: Fetch all Production Orders with correct column mappings
 app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT 
-                po.ProductionOrderID, 
+                po.ProductionOrderID AS OrderID, 
+                ISNULL(po.OrderNo, 'PRD-' + CAST(po.ProductionOrderID AS VARCHAR)) AS OrderNo,
                 po.OrderDate, 
                 po.SalesOrderRef, 
                 po.TargetQuantity, 
