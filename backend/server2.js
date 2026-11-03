@@ -1044,78 +1044,67 @@ app.post('/api/purchase-receiving', async (req, res) => {
 });
 
 // ==========================================
-// PRODUCTION ORDER ROUTES
+// PRODUCTION ORDER ROUTES (BULLETPROOF FIX)
 // ==========================================
-
-// 1. GET: Fetch all Production Orders with correct column mappings
+// 1. GET: Fetch all Production Orders safely
 app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT 
-                po.ProductionOrderID AS OrderID, 
+                po.ProductionOrderID, 
                 ISNULL(po.OrderNo, 'PRD-' + CAST(po.ProductionOrderID AS VARCHAR)) AS OrderNo,
-                po.OrderDate, 
-                po.SalesOrderRef, 
-                po.TargetQuantity, 
-                po.Status,
-                p.ProductName,
-                p.ClosingBalance
+                ISNULL(po.OrderDate, GETDATE()) AS OrderDate, 
+                ISNULL(po.Status, 'Pending') AS Status,
+                ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
+                ISNULL(p.ProductName, 'Direct Production') AS ProductName
             FROM mridul.ProductionOrder po
-            INNER JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-            ORDER BY po.OrderDate DESC
+            LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
+            ORDER BY po.ProductionOrderID DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
-        console.error('Error fetching Production Orders:', err);
-        res.status(500).json({ error: 'Failed to fetch Production Orders' });
+        console.error('SQL Error in GET /api/production-orders:', err.message);
+        res.status(500).json({ error: err.message }); // Ye frontend par exact database error dikhayega agar koi column missing hua
     }
 });
 
-// 2. POST: Generate a new Production Order
+// 2. POST: Create Production Order safely
 app.post('/api/production-orders', async (req, res) => {
     try {
-        // Supporting both single item object or items array structure from frontend forms
         const { productId, salesOrderRef, targetQuantity, items } = req.body;
-
+        
         let targetProdId = productId;
         let targetQty = targetQuantity;
         let salesRef = salesOrderRef || null;
 
-        // Fallback if payload comes as an array of items from dynamic row forms
         if (items && Array.isArray(items) && items.length > 0) {
             targetProdId = items[0].productId;
             targetQty = items[0].quantity || items[0].targetQuantity;
         }
 
-        if (!targetProdId || !targetQty || targetQty <= 0) {
-            return res.status(400).json({ error: 'Valid Product and a positive Target Quantity are required' });
+        if (!targetProdId || !targetQty) {
+            return res.status(400).json({ error: 'Product and Target Quantity are required' });
         }
 
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
+        await pool.request()
             .input('productId', sql.Int, targetProdId)
             .input('salesOrderRef', sql.VarChar, salesRef)
             .input('targetQty', sql.Int, targetQty)
             .query(`
                 INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity, Status, OrderDate)
-                OUTPUT INSERTED.ProductionOrderID
                 VALUES (@productId, @salesOrderRef, @targetQty, 'Pending', GETDATE())
             `);
 
-        const newId = result.recordset[0].ProductionOrderID;
-
-        res.status(201).json({ 
-            message: 'Production Order generated successfully!',
-            productionOrderId: newId
-        });
+        res.status(201).json({ message: 'Production Order generated successfully!' });
     } catch (err) {
-        console.error('Error creating Production Order:', err);
-        res.status(500).json({ error: 'Failed to generate Production Order' });
+        console.error('SQL Error in POST /api/production-orders:', err.message);
+        res.status(500).json({ error: err.message });
     }
 });
 
-// 3. POST: Cancel/Delete a pending Production Order (Safe Delete via POST Tunneling)
+// 3. POST: Delete/Cancel Production Order safely
 app.post('/api/production-orders/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -1125,17 +1114,17 @@ app.post('/api/production-orders/delete/:id', async (req, res) => {
             .input('poId', sql.Int, id)
             .query(`
                 DELETE FROM mridul.ProductionOrder 
-                WHERE ProductionOrderID = @poId AND Status = 'Pending'
+                WHERE ProductionOrderID = @poId
             `);
         
         if (result.rowsAffected[0] === 0) {
-            return res.status(400).json({ error: 'Cannot delete order. It either does not exist, or it is already In Progress/Completed.' });
+            return res.status(404).json({ error: 'Production Order not found.' });
         }
 
-        res.status(200).json({ message: 'Production Order cancelled successfully.' });
+        res.status(200).json({ message: 'Production Order deleted successfully.' });
     } catch (err) {
-        console.error('Error deleting Production Order:', err);
-        res.status(500).json({ error: 'Failed to cancel Production Order' });
+        console.error('SQL Error in DELETE production order:', err.message);
+        res.status(500).json({ error: err.message });
     }
 });
 // ==========================================
