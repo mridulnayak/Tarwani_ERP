@@ -19,11 +19,9 @@ export default function PartyMaster({ user }) {
   const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchData = async () => {
-    // 1. GET THE TOKEN ONCE AT THE START OF THE FETCH
     const token = localStorage.getItem('erp_token');
 
     try {
-      // 2. ATTACH THE TOKEN TO THE GET REQUEST
       const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
         method: 'GET',
         headers: { 'x-access-token': token }
@@ -37,7 +35,6 @@ export default function PartyMaster({ user }) {
     }
 
     try {
-      // 3. ATTACH THE TOKEN TO THE SECOND GET REQUEST
       const dRes = await fetch('https://sms.uvtechsolutions.co.in/api/designations', {
         method: 'GET',
         headers: { 'x-access-token': token }
@@ -61,10 +58,8 @@ export default function PartyMaster({ user }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!partyName) return alert("Name is required");
-    if (partyType === 'Employee' && !selectedDesignationId) return alert("Select a designation");
+    if (!partyName || !partyType) return alert("Please fill in all required fields.");
 
-    const method = 'POST';
     const url = editingId 
       ? `https://sms.uvtechsolutions.co.in/api/parties/edit/${editingId}`
       : 'https://sms.uvtechsolutions.co.in/api/parties';
@@ -72,28 +67,33 @@ export default function PartyMaster({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(url, {
-        method: method,
+        method: 'POST', 
         headers: { 
           'Content-Type': 'application/json',
-          'x-access-token': token
+          'x-access-token': token 
         },
+        // Mapped accurately to backend schema requirements
         body: JSON.stringify({ 
           partyName, 
           partyType, 
-          designationId: partyType === 'Employee' ? selectedDesignationId : null, 
-          contactNumber: partyType !== 'Employee' ? contactNumber : null, 
-          address: partyType !== 'Employee' ? address : null, 
-          gstNumber: partyType !== 'Employee' ? gstNumber : null 
+          designationId: partyType === 'Employee' ? selectedDesignationId : null,
+          phone: contactNumber, 
+          address, 
+          gstNumber 
         })
       });
-      
+
       if (res.ok) {
         cancelEdit();
-        fetchData(); 
+        fetchData(); // FIXED: calling fetchData instead of missing fetchParties
       } else {
-        alert("Failed to save party.");
+        const errData = await res.json();
+        alert(`Failed to save party: ${errData.error || 'Unknown error'}`);
       }
-    } catch (error) { console.error("Error saving party:", error); }
+    } catch (error) {
+      console.error('Error saving party:', error);
+      alert('Network error while saving party.');
+    }
   };
 
   const handleEdit = (party) => {
@@ -113,14 +113,13 @@ export default function PartyMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${id}`, { 
-    // METHOD BADAL KAR POST KAR DIYA
-    method: 'POST',
-    headers: { 
-        'Content-Type': 'application/json',
-        'x-access-token': token 
-    }
-});
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${id}`, {
+        method: 'POST',
+        headers: { 
+            'Content-Type': 'application/json',
+            'x-access-token': token 
+        }
+      });
       if (res.ok) {
         fetchData();
       } else {
@@ -164,6 +163,7 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
 
   return (
     <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
+      
       {/* ENTERPRISE TOOLBAR */}
       <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
@@ -244,21 +244,23 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
                   }}
                 />
               </div>
-            ) : (
-              <>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-gray-700 uppercase">Contact Number</label>
-                  <input type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="Phone/Mobile" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-gray-700 uppercase">Address</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full Address" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs font-bold text-gray-700 uppercase">GST Number</label>
-                  <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Optional" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
-                </div>
-              </>
+            ) : null}
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-700 uppercase">Contact Number</label>
+              <input type="text" value={contactNumber} onChange={(e) => setContactNumber(e.target.value)} placeholder="Phone/Mobile" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-bold text-gray-700 uppercase">Address</label>
+              <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full Address" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+            </div>
+
+            {partyType !== 'Employee' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-bold text-gray-700 uppercase">GST Number</label>
+                <input type="text" value={gstNumber} onChange={(e) => setGstNumber(e.target.value)} placeholder="Optional" className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+              </div>
             )}
           </div>
 
@@ -310,12 +312,12 @@ const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${
                 <td className="px-4 py-2 font-semibold text-gray-900 border-r border-gray-200">{party.PartyName}</td>
                 <td className="px-4 py-2 text-gray-700 border-r border-gray-200">
                   {party.PartyType === 'Employee' ? (
-                    <span>Role: {party.DesignationName}</span>
+                    <span>Role: {party.DesignationName || 'N/A'}</span>
                   ) : (
                     <span>
                       {party.ContactNumber || 'N/A'}
                       {party.Address && ` | ${party.Address}`}
-                      {party.GSTNumber ? ` | GST: ${party.GSTNumber}` : ' | No GST'}
+                      {party.GSTNumber ? ` | GST: ${party.GSTNumber}` : ''}
                     </span>
                   )}
                 </td>
