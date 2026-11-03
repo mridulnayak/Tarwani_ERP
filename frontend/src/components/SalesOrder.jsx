@@ -12,6 +12,13 @@ export default function SalesOrder({ user }) {
   const [customerId, setCustomerId] = useState('');
   const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
   
+  // Inline Quick-Add Customer State
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustPhone, setNewCustPhone] = useState('');
+  const [newCustAddress, setNewCustAddress] = useState('');
+  const [newCustGst, setNewCustGst] = useState('');
+
   // Enterprise Features
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -24,7 +31,6 @@ export default function SalesOrder({ user }) {
       });
       const partyData = await partyRes.json();
       setCustomers(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Customer') : []);
-
 
       const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
         method: 'GET',
@@ -55,19 +61,61 @@ export default function SalesOrder({ user }) {
     label: `${p.ProductName} (Stock: ${p.ClosingBalance || 0})`
   }));
 
+  // --- QUICK ADD CUSTOMER HANDLER ---
+  const handleQuickAddCustomer = async (e) => {
+    e.preventDefault();
+    if (!newCustName) return alert("Please enter Customer Name.");
+
+    try {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
+        body: JSON.stringify({ 
+          partyName: newCustName, 
+          partyType: 'Customer', 
+          phone: newCustPhone, 
+          address: newCustAddress, 
+          gstNumber: newCustGst 
+        })
+      });
+
+      if (res.ok) {
+        // Clear quick-add form & close modal
+        setNewCustName('');
+        setNewCustPhone('');
+        setNewCustAddress('');
+        setNewCustGst('');
+        setIsQuickAddOpen(false);
+        
+        // Refresh customer list to pick up the new ID
+        await fetchData();
+        alert("Customer created successfully!");
+      } else {
+        const errData = await res.json();
+        alert(`Failed to create customer: ${errData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error creating quick-add customer:", error);
+      alert("Network error while creating customer.");
+    }
+  };
+
   // --- DYNAMIC ROW HANDLERS ---
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
-    const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
+  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = value;
     setItems(newItems);
   };
 
-// --- PDF GENERATION LOGIC ---
+  // --- PDF GENERATION LOGIC ---
   const generateOrderAcknowledgment = async (order) => {
     try {
-      // UPDATED TO ABSOLUTE URL FOR MOBILE APK
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${order.SO_ID}/items`, {
         method: 'GET',
@@ -103,12 +151,10 @@ export default function SalesOrder({ user }) {
             item.ProductName,
             `${item.Quantity} Units`,
             `Rs. ${item.Rate.toFixed(2)}`,
-            // FIXED SYNTAX ERROR HERE (Added multiplication operator)
             `Rs. ${(item.Quantity * item.Rate).toFixed(2)}`
           ])
         : [['-', 'Items pending database sync...', '-', '-', '-']];
 
-      // UPDATED TO STANDALONE FUNCTION
       autoTable(doc, {
         startY: 72,
         headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
@@ -142,9 +188,13 @@ export default function SalesOrder({ user }) {
     if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
 
     try {
+      const token = localStorage.getItem('erp_token');
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
         body: JSON.stringify({ customerId, items })
       });
       
@@ -161,7 +211,7 @@ export default function SalesOrder({ user }) {
   };
 
   // Filter Sales Orders based on search term
-const filteredOrders = (salesOrders || []).filter(so =>
+  const filteredOrders = (salesOrders || []).filter(so =>
     so.SONumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     so.CustomerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     so.Status.toLowerCase().includes(searchTerm.toLowerCase())
@@ -171,10 +221,79 @@ const filteredOrders = (salesOrders || []).filter(so =>
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
       {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Sales Order</h2>
-        <p className="text-sm text-gray-500 mt-1">Record client orders, assign selling rates, and track fulfillment status.</p>
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Sales Order</h2>
+          <p className="text-sm text-gray-500 mt-1">Record client orders, assign selling rates, and track fulfillment status.</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow transition-colors"
+        >
+          {isQuickAddOpen ? '✕ Close Quick Add' : '+ Quick Add Customer'}
+        </button>
       </div>
+
+      {/* INLINE QUICK ADD CUSTOMER FORM */}
+      {isQuickAddOpen && (
+        <div className="p-5 bg-green-50 border-b border-green-200">
+          <form onSubmit={handleQuickAddCustomer} className="flex flex-col gap-4">
+            <h3 className="text-sm font-bold text-green-900 uppercase">Instant Customer Registration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Customer Name *</label>
+                <input 
+                  type="text" 
+                  value={newCustName} 
+                  onChange={(e) => setNewCustName(e.target.value)} 
+                  placeholder="Enter name..." 
+                  required
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Contact Number</label>
+                <input 
+                  type="text" 
+                  value={newCustPhone} 
+                  onChange={(e) => setNewCustPhone(e.target.value)} 
+                  placeholder="Phone..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Address</label>
+                <input 
+                  type="text" 
+                  value={newCustAddress} 
+                  onChange={(e) => setNewCustAddress(e.target.value)} 
+                  placeholder="Address..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">GST Number</label>
+                <input 
+                  type="text" 
+                  value={newCustGst} 
+                  onChange={(e) => setNewCustGst(e.target.value)} 
+                  placeholder="GST (Optional)..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button 
+                type="submit" 
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded shadow transition-colors"
+              >
+                Save & Select Customer
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
         {/* HEADER: Customer Selection */}
@@ -217,9 +336,9 @@ const filteredOrders = (salesOrders || []).filter(so =>
                 <input 
                   type="number" min="1"
                   value={item.quantity} 
-                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
+                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 1)}
                   placeholder="Qty"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
 
@@ -228,9 +347,8 @@ const filteredOrders = (salesOrders || []).filter(so =>
                 <input 
                   type="number" step="0.01" min="0"
                   value={item.rate} 
-                  onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value))}
-                  /*placeholder="Rate (₹)"*/
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  onChange={(e) => handleItemChange(index, 'rate', parseFloat(e.target.value) || 0)}
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
 
@@ -239,7 +357,7 @@ const filteredOrders = (salesOrders || []).filter(so =>
                   <button 
                     type="button" 
                     onClick={() => handleRemoveItem(index)}
-                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors"
+                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors text-sm"
                   >
                     X
                   </button>

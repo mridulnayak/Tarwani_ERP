@@ -12,6 +12,13 @@ export default function PurchaseOrder({ user }) {
   const [vendorId, setVendorId] = useState('');
   const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
   
+  // Inline Quick-Add Vendor State
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
+  const [newVendorName, setNewVendorName] = useState('');
+  const [newVendorPhone, setNewVendorPhone] = useState('');
+  const [newVendorAddress, setNewVendorAddress] = useState('');
+  const [newVendorGst, setNewVendorGst] = useState('');
+
   // Enterprise Features
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -54,19 +61,59 @@ export default function PurchaseOrder({ user }) {
     label: p.ProductName
   }));
 
+  // --- QUICK ADD VENDOR HANDLER ---
+  const handleQuickAddVendor = async (e) => {
+    e.preventDefault();
+    if (!newVendorName) return alert("Please enter Vendor Name.");
+
+    try {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
+        body: JSON.stringify({ 
+          partyName: newVendorName, 
+          partyType: 'Vendor', 
+          phone: newVendorPhone, 
+          address: newVendorAddress, 
+          gstNumber: newVendorGst 
+        })
+      });
+
+      if (res.ok) {
+        // Clear quick-add form & close modal
+        setNewVendorName('');
+        setNewVendorPhone('');
+        setNewVendorAddress('');
+        setNewVendorGst('');
+        setIsQuickAddOpen(false);
+        
+        // Refresh vendor list to pick up the new ID
+        await fetchData();
+        alert("Vendor created successfully!");
+      } else {
+        const errData = await res.json();
+        alert(`Failed to create vendor: ${errData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error("Error creating quick-add vendor:", error);
+      alert("Network error while creating vendor.");
+    }
+  };
+
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
   const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
   
   const handleItemChange = (index, field, value) => {
     const newItems = [...items];
-    
-    // 🚨 Negative Quantity Patch: Force quantities to be at least 1
     if (field === 'quantity') {
         newItems[index][field] = Math.max(1, parseInt(value) || 1);
     } else {
         newItems[index][field] = value;
     }
-    
     setItems(newItems);
   };
 
@@ -144,7 +191,7 @@ export default function PurchaseOrder({ user }) {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',
-            'x-access-token': token // 🚨 IDENTITY FIX: Token is now sent
+            'x-access-token': token 
         },
         body: JSON.stringify({ vendorId, items })
       });
@@ -176,10 +223,79 @@ export default function PurchaseOrder({ user }) {
           <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Purchase Order</h2>
           <p className="text-sm text-gray-500 mt-1">Issue official POs to vendors for raw material procurement.</p>
         </div>
-        <div className="hidden md:flex bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200 items-center gap-2">
-          <span>👤</span> Logged in as: {user?.username || 'Admin'}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow transition-colors"
+          >
+            {isQuickAddOpen ? '✕ Close Quick Add' : '+ Quick Add Vendor'}
+          </button>
+          <div className="hidden md:flex bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200 items-center gap-2">
+            <span>👤</span> Logged in as: {user?.username || 'Admin'}
+          </div>
         </div>
       </div>
+
+      {/* INLINE QUICK ADD VENDOR FORM */}
+      {isQuickAddOpen && (
+        <div className="p-5 bg-green-50 border-b border-green-200">
+          <form onSubmit={handleQuickAddVendor} className="flex flex-col gap-4">
+            <h3 className="text-sm font-bold text-green-900 uppercase">Instant Vendor Registration</h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Vendor Name *</label>
+                <input 
+                  type="text" 
+                  value={newVendorName} 
+                  onChange={(e) => setNewVendorName(e.target.value)} 
+                  placeholder="Enter vendor name..." 
+                  required
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Contact Number</label>
+                <input 
+                  type="text" 
+                  value={newVendorPhone} 
+                  onChange={(e) => setNewVendorPhone(e.target.value)} 
+                  placeholder="Phone..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Address</label>
+                <input 
+                  type="text" 
+                  value={newVendorAddress} 
+                  onChange={(e) => setNewVendorAddress(e.target.value)} 
+                  placeholder="Address..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">GST Number</label>
+                <input 
+                  type="text" 
+                  value={newVendorGst} 
+                  onChange={(e) => setNewVendorGst(e.target.value)} 
+                  placeholder="GST (Optional)..." 
+                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button 
+                type="submit" 
+                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded shadow transition-colors"
+              >
+                Save & Select Vendor
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
       
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
         <div className="mb-6">
@@ -223,7 +339,7 @@ export default function PurchaseOrder({ user }) {
                   value={item.quantity} 
                   onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
                   placeholder="Qty"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
                 />
               </div>
 
@@ -232,7 +348,7 @@ export default function PurchaseOrder({ user }) {
                   <button 
                     type="button" 
                     onClick={() => handleRemoveItem(index)}
-                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors"
+                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors text-sm"
                   >
                     X
                   </button>
