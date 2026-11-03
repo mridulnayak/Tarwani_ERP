@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function FinishedGoods() {
   const [inProgressOrders, setInProgressOrders] = useState([]);
@@ -26,8 +27,13 @@ export default function FinishedGoods() {
 
   useEffect(() => { fetchInProgressOrders(); }, []);
 
-  const handleOrderSelection = (e) => {
-    const selectedPoId = e.target.value;
+  const productionOrderOptions = inProgressOrders.map(po => ({
+    value: String(po.ProductionOrderID),
+    label: `${po.ProductName} | Target: ${po.TargetQuantity}`
+  }));
+
+  const handleOrderSelection = (selected) => {
+    const selectedPoId = selected ? selected.value : '';
     setProductionOrderId(selectedPoId);
     
     const selectedPo = inProgressOrders.find(po => po.ProductionOrderID.toString() === selectedPoId);
@@ -102,18 +108,16 @@ export default function FinishedGoods() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1 md:col-span-2">
               <label className="text-xs font-semibold text-gray-500 uppercase">Active Production Order</label>
-              <select 
-                value={productionOrderId} 
-                onChange={handleOrderSelection} 
-                className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="" disabled>-- Select 'In Progress' Order --</option>
-                {(inProgressOrders || []).map(po => (
-                  <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
-                    {po.ProductName} | Target: {po.TargetQuantity}
-                  </option>
-                ))}
-              </select>
+              <Select
+                options={productionOrderOptions}
+                value={productionOrderOptions.find(opt => opt.value === productionOrderId) || null}
+                onChange={handleOrderSelection}
+                isSearchable
+                isClearable
+                placeholder="Search 'In Progress' orders..."
+                className="w-full text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
             </div>
 
             <div className="flex flex-col gap-1">

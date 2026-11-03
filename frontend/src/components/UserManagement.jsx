@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -25,6 +26,13 @@ export default function UserManagement() {
   };
 
   useEffect(() => { fetchUsers(); }, []);
+
+  const accessRoleOptions = [
+    { value: 'Admin', label: 'Master Admin (Full Access)' },
+    { value: 'Sales', label: 'Sales Team (Sales & Dispatch)' },
+    { value: 'Store', label: 'Store Manager (Purchase & Issual)' },
+    { value: 'Production', label: 'Factory Floor (Production)' }
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -113,17 +121,16 @@ export default function UserManagement() {
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold text-gray-500 uppercase">Access Role</label>
-              <select 
-                value={role} 
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-              >
-                <option value="" disabled>-- Select Module Access --</option>
-                <option value="Admin">Master Admin (Full Access)</option>
-                <option value="Sales">Sales Team (Sales & Dispatch)</option>
-                <option value="Store">Store Manager (Purchase & Issual)</option>
-                <option value="Production">Factory Floor (Production)</option>
-              </select>
+              <Select
+                options={accessRoleOptions}
+                value={accessRoleOptions.find(opt => opt.value === role) || null}
+                onChange={(selected) => setRole(selected ? selected.value : '')}
+                isSearchable
+                isClearable
+                placeholder="Search access role..."
+                className="w-full text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
             </div>
           </div>
 

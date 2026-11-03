@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function RoleAllocation({ user }) {
   const [users, setUsers] = useState([]);
@@ -82,6 +83,7 @@ export default function RoleAllocation({ user }) {
   );
 
   const availableRoles = ['Admin', 'Production', 'Store', 'Sales', 'Staff'];
+  const roleOptions = availableRoles.map(role => ({ value: role, label: role }));
 
   return (
     <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
@@ -132,15 +134,16 @@ export default function RoleAllocation({ user }) {
                   </td>
                   
                   <td className="px-4 py-2 border-r border-gray-200">
-                    <select
-                      value={pendingRoleChanges[u.UserID] || u.Role || ''}
-                      onChange={(e) => handleRoleSelect(u.UserID, e.target.value)}
-                      className="w-full p-1.5 text-sm bg-white border border-gray-400 rounded focus:ring-2 focus:ring-blue-500"
-                    >
-                      {availableRoles.map(role => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
+                    <Select
+                      options={roleOptions}
+                      value={roleOptions.find(opt => opt.value === (pendingRoleChanges[u.UserID] || u.Role || '')) || null}
+                      onChange={(selected) => handleRoleSelect(u.UserID, selected ? selected.value : '')}
+                      isSearchable
+                      isClearable
+                      placeholder="Search roles..."
+                      className="w-full text-gray-900 text-sm"
+                      classNamePrefix="erp-select"
+                    />
                   </td>
                   
                   <td className="px-4 py-2 text-center">

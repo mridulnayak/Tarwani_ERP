@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function IssualManagement() {
   const [productionOrders, setProductionOrders] = useState([]);
@@ -47,6 +48,19 @@ export default function IssualManagement() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const productionOrderOptions = productionOrders.map(po => ({
+    value: String(po.ProductionOrderID),
+    label: `${po.ProductName} | Target: ${po.TargetQuantity} (Date: ${new Date(po.OrderDate).toLocaleDateString()})`
+  }));
+  const tankOptions = tanks.map(t => ({
+    value: String(t.TankID),
+    label: `${t.TankName} (Stock: ${t.CurrentStock})`
+  }));
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: p.ProductName
+  }));
 
   // --- DYNAMIC ROW HANDLERS ---
   const handleAddItem = () => {
@@ -108,18 +122,16 @@ export default function IssualManagement() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           <div className="flex flex-col gap-1 md:col-span-2">
             <label className="text-xs font-semibold text-gray-500 uppercase">Link to Production Order</label>
-            <select 
-              value={productionOrderId} 
-              onChange={(e) => setProductionOrderId(e.target.value)}
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            >
-              <option value="" disabled>-- Select Pending Production Order --</option>
-              {(productionOrders || []).map(po => (
-                <option key={po.ProductionOrderID} value={po.ProductionOrderID}>
-                  {po.ProductName} | Target: {po.TargetQuantity} (Date: {new Date(po.OrderDate).toLocaleDateString()})
-                </option>
-              ))}
-            </select>
+            <Select
+              options={productionOrderOptions}
+              value={productionOrderOptions.find(opt => opt.value === productionOrderId) || null}
+              onChange={(selected) => setProductionOrderId(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search pending production orders..."
+              className="w-full text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
 
           <div className="flex flex-col gap-1 md:col-span-1">
@@ -143,26 +155,30 @@ export default function IssualManagement() {
               
               <div className="md:col-span-5 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Deduct From Tank</label>
-                <select 
-                  value={item.tankId} 
-                  onChange={(e) => handleItemChange(index, 'tankId', e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>-- Deduct From Tank --</option>
-                  {(tanks || []).map(t => <option key={t.TankID} value={t.TankID}>{t.TankName} (Stock: {t.CurrentStock})</option>)}
-                </select>
+                <Select
+                  options={tankOptions}
+                  value={tankOptions.find(opt => opt.value === item.tankId) || null}
+                  onChange={(selected) => handleItemChange(index, 'tankId', selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search tanks..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="md:col-span-4 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
-                <select 
-                  value={item.productId} 
-                  onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>-- Raw Material --</option>
-                  {(products || []).map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
-                </select>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(opt => opt.value === item.productId) || null}
+                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search raw materials..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="md:col-span-2 flex flex-col gap-1">

@@ -13,10 +13,24 @@ export default function PartyMaster({ user }) {
   const [address, setAddress] = useState('');
   const [gstNumber, setGstNumber] = useState(''); 
   
-  // Enterprise Features State
+  // Enterprise Features & Filter State
   const [searchTerm, setSearchTerm] = useState(''); 
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState('ALL'); // 👈 NEW: Type Filter State
   const [editingId, setEditingId] = useState(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
+
+  const partyTypeOptions = [
+    { value: 'Employee', label: 'Employee' },
+    { value: 'Vendor', label: 'Vendor' },
+    { value: 'Customer', label: 'Customer' }
+  ];
+
+  const typeFilterOptions = [
+    { value: 'ALL', label: 'All Types (All)' },
+    { value: 'Employee', label: 'Employees Only' },
+    { value: 'Vendor', label: 'Vendors Only' },
+    { value: 'Customer', label: 'Customers Only' }
+  ];
 
   const fetchData = async () => {
     const token = localStorage.getItem('erp_token');
@@ -72,7 +86,6 @@ export default function PartyMaster({ user }) {
           'Content-Type': 'application/json',
           'x-access-token': token 
         },
-        // Mapped accurately to backend schema requirements
         body: JSON.stringify({ 
           partyName, 
           partyType, 
@@ -85,7 +98,7 @@ export default function PartyMaster({ user }) {
 
       if (res.ok) {
         cancelEdit();
-        fetchData(); // FIXED: calling fetchData instead of missing fetchParties
+        fetchData();
       } else {
         const errData = await res.json();
         alert(`Failed to save party: ${errData.error || 'Unknown error'}`);
@@ -141,15 +154,18 @@ export default function PartyMaster({ user }) {
     setIsFormVisible(false);
   };
 
+  // 👈 UPDATED FILTER LOGIC: Checks both Type dropdown filter and search box keyword
   const filteredParties = parties.filter((p) => {
+    const matchesType = selectedTypeFilter === 'ALL' || p.PartyType === selectedTypeFilter;
     const searchLower = searchTerm.toLowerCase();
-    return (
+    const matchesSearch = (
       p.PartyName.toLowerCase().includes(searchLower) ||
       p.PartyType.toLowerCase().includes(searchLower) ||
       (p.ContactNumber && p.ContactNumber.toLowerCase().includes(searchLower)) ||
       (p.GSTNumber && p.GSTNumber.toLowerCase().includes(searchLower)) ||
       (p.DesignationName && p.DesignationName.toLowerCase().includes(searchLower))
     );
+    return matchesType && matchesSearch;
   });
 
   const getBadgeStyle = (type) => {
@@ -164,18 +180,31 @@ export default function PartyMaster({ user }) {
   return (
     <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
       
-      {/* ENTERPRISE TOOLBAR */}
+      {/* ENTERPRISE TOOLBAR WITH TYPE FILTER */}
       <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
           Party Master
         </h2>
-        <div className="flex w-full md:w-auto gap-3">
+        
+        <div className="flex flex-col md:flex-row w-full md:w-auto gap-3 items-center">
+          {/* 👈 NEW TYPE FILTER DROPDOWN */}
+          <div className="w-full md:w-48">
+            <Select
+              options={typeFilterOptions}
+              value={typeFilterOptions.find(opt => opt.value === selectedTypeFilter) || typeFilterOptions[0]}
+              onChange={(selected) => setSelectedTypeFilter(selected ? selected.value : 'ALL')}
+              isSearchable={false}
+              className="text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
+          </div>
+
           <input
             type="search"
-            placeholder="Search Parties by Name, Type, Role, or GST..."
+            placeholder="Search Parties..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm text-sm"
           />
           {!isFormVisible && (
             <button
@@ -184,7 +213,7 @@ export default function PartyMaster({ user }) {
                 cancelEdit();
                 setIsFormVisible(true);
               }}
-              className="whitespace-nowrap px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
+              className="whitespace-nowrap w-full md:w-auto px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
             >
               + Create New
             </button>
@@ -199,19 +228,20 @@ export default function PartyMaster({ user }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1">
               <label className="text-xs font-bold text-gray-700 uppercase">Party Type</label>
-              <select 
-                value={partyType} 
-                onChange={(e) => {
-                  setPartyType(e.target.value);
-                  if (e.target.value !== 'Employee') setSelectedDesignationId('');
-                }} 
-                disabled={editingId !== null}
-                className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-50"
-              >
-                <option value="Employee">Employee</option>
-                <option value="Vendor">Vendor</option>
-                <option value="Customer">Customer</option>
-              </select>
+              <Select
+                options={partyTypeOptions}
+                value={partyTypeOptions.find(opt => opt.value === partyType) || null}
+                onChange={(selected) => {
+                  const nextPartyType = selected ? selected.value : '';
+                  setPartyType(nextPartyType);
+                  if (nextPartyType !== 'Employee') setSelectedDesignationId('');
+                }}
+                isSearchable
+                isClearable={false}
+                isDisabled={editingId !== null}
+                className="w-full text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
             </div>
             
             <div className="flex flex-col gap-1 md:col-span-2">
@@ -234,14 +264,11 @@ export default function PartyMaster({ user }) {
                   options={designationOptions}
                   value={selectedDesigOption}
                   onChange={(selected) => setSelectedDesignationId(selected ? selected.value : '')}
+                  isSearchable
                   isClearable
                   placeholder="Search designation..."
                   className="text-gray-900 text-sm"
-                  styles={{
-                    control: (base) => ({
-                      ...base, backgroundColor: '#ffffff', borderColor: '#9ca3af', borderRadius: '0.25rem', boxShadow: 'none', '&:hover': { borderColor: '#3b82f6' }
-                    })
-                  }}
+                  classNamePrefix="erp-select"
                 />
               </div>
             ) : null}
@@ -348,7 +375,7 @@ export default function PartyMaster({ user }) {
             {filteredParties.length === 0 && (
               <tr>
                 <td colSpan={user?.role === 'Admin' ? 6 : 4} className="px-4 py-8 text-center text-gray-500 font-medium">
-                  No records found matching your search.
+                  No records found matching your filter and search criteria.
                 </td>
               </tr>
             )}

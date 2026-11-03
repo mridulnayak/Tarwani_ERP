@@ -144,21 +144,18 @@ export default function App() {
     setIsMobileMenuOpen(false);
   };
 
-  return (
+return (
     <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
       
-{/* MOBILE TOP BAR */}
+      {/* MOBILE TOP BAR (Enlarged Logo, Text Removed) */}
       <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center justify-between px-4 z-50 shadow-md">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center">
           <img 
             src="/tarwani.png" 
             alt="Tarwani Soaps Logo" 
-            className="h-8 w-auto object-contain bg-white rounded p-0.5 shadow-sm"
-            onError={(e) => {
-              e.target.style.display = 'none'; // Fallback if image file name differs
-            }}
+            className="h-12 w-auto object-contain bg-white rounded p-1 shadow-sm"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
-          <span className="font-bold text-lg tracking-wide">Tarwani Soaps</span>
         </div>
         <button 
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -167,24 +164,19 @@ export default function App() {
           {isMobileMenuOpen ? '✕' : '☰'}
         </button>
       </div>
-
-      {/* SIDEBAR (Hidden on mobile unless toggled, fixed on desktop) */}
+{/* SIDEBAR (Desktop) */}
       <aside className={`absolute md:relative top-0 left-0 h-full w-72 bg-gray-900 text-gray-300 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
         ${isMobileMenuOpen ? 'translate-x-0 pt-16' : '-translate-x-full md:translate-x-0'}
       `}>
-        {/* DESKTOP HEADER */}
-        <div className="hidden md:flex flex-col items-center justify-center p-5 bg-gray-950 border-b border-gray-800 text-center">
+        {/* DESKTOP HEADER (Enlarged Logo, Text Removed, Role Preserved) */}
+        <div className="hidden md:flex flex-col items-center justify-center p-6 bg-gray-950 border-b border-gray-800 text-center">
           <img 
             src="/tarwani.png" 
             alt="Tarwani Soaps Logo" 
-            className="h-12 w-auto object-contain mb-2"
-            onError={(e) => {
-              // Fallback if image fails to load
-              e.target.style.display = 'none';
-            }}
+            className="h-20 w-auto object-contain mb-3 drop-shadow-md"
+            onError={(e) => { e.target.style.display = 'none'; }}
           />
-          <h1 className="text-lg font-black text-white tracking-wider uppercase">Tarwani Soaps</h1>
-          <p className="text-xs text-blue-400 mt-1 font-medium">Logged in as: {user.role}</p>
+          <p className="text-xs text-blue-400 font-semibold tracking-wide">Logged in as: {user.role}</p>
         </div>
 
         {/* NAVIGATION ACCORDION */}
@@ -225,7 +217,7 @@ export default function App() {
           })}
         </nav>
 
-        {/* LOGOUT BUTTON */}
+{/* LOGOUT BUTTON */}
         <div className="p-4 border-t border-gray-800 bg-gray-950">
           <button 
             onClick={handleLogout}
@@ -236,7 +228,7 @@ export default function App() {
         </div>
       </aside>
 
-      {/* MOBILE BACKDROP OVERLAY */}
+{/* MOBILE BACKDROP OVERLAY */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
@@ -244,7 +236,7 @@ export default function App() {
         ></div>
       )}
 
-      {/* MAIN CONTENT AREA */}
+{/* MAIN CONTENT AREA */}
       <main className="flex-1 h-full pt-16 md:pt-0 overflow-y-auto bg-gray-100">
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {renderContent()}

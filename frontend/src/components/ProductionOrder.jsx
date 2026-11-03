@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -38,6 +39,11 @@ export default function ProductionOrder({ user }) {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: `${p.ProductName} (Stock: ${p.ClosingBalance || 0})`
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -150,18 +156,16 @@ export default function ProductionOrder({ user }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1 md:col-span-2">
                 <label className="text-xs font-bold text-gray-700 uppercase">Product / Finish Good</label>
-                <select 
-                  value={productId} 
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="" disabled>-- Select Product --</option>
-                  {(products || []).map(p => (
-                    <option key={p.ProductID} value={p.ProductID}>
-                      {p.ProductName} (Stock: {p.ClosingBalance || 0})
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(opt => opt.value === productId) || null}
+                  onChange={(selected) => setProductId(selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search products..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="flex flex-col gap-1">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -43,6 +44,15 @@ export default function PurchaseOrder({ user }) {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const vendorOptions = vendors.map(v => ({
+    value: String(v.PartyID),
+    label: v.PartyName
+  }));
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: p.ProductName
+  }));
 
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
   const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
@@ -174,14 +184,16 @@ export default function PurchaseOrder({ user }) {
       <form onSubmit={handleSubmit} className="p-5 md:p-6">
         <div className="mb-6">
           <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Vendor</label>
-          <select 
-            value={vendorId} 
-            onChange={(e) => setVendorId(e.target.value)}
-            className="w-full md:w-1/2 p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-          >
-            <option value="" disabled>-- Select Vendor --</option>
-            {(vendors || []).map(v => <option key={v.PartyID} value={v.PartyID}>{v.PartyName}</option>)}
-          </select>
+          <Select
+            options={vendorOptions}
+            value={vendorOptions.find(opt => opt.value === vendorId) || null}
+            onChange={(selected) => setVendorId(selected ? selected.value : '')}
+            isSearchable
+            isClearable
+            placeholder="Search vendors..."
+            className="w-full md:w-1/2 text-gray-900 text-sm"
+            classNamePrefix="erp-select"
+          />
         </div>
 
         <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
@@ -192,14 +204,16 @@ export default function PurchaseOrder({ user }) {
               
               <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
-                <select 
-                  value={item.productId} 
-                  onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>-- Select Material --</option>
-                  {(products || []).map(p => <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>)}
-                </select>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(opt => opt.value === item.productId) || null}
+                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search materials..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="md:col-span-3 flex flex-col gap-1">

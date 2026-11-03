@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -44,6 +45,15 @@ export default function SalesOrder({ user }) {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const customerOptions = customers.map(c => ({
+    value: String(c.PartyID),
+    label: c.PartyName
+  }));
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: `${p.ProductName} (Stock: ${p.ClosingBalance || 0})`
+  }));
 
   // --- DYNAMIC ROW HANDLERS ---
   const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
@@ -170,14 +180,16 @@ const filteredOrders = (salesOrders || []).filter(so =>
         {/* HEADER: Customer Selection */}
         <div className="mb-6">
           <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Customer</label>
-          <select 
-            value={customerId} 
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full md:w-1/2 p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-          >
-            <option value="" disabled>-- Select Customer --</option>
-            {(customers || []).map(c => <option key={c.PartyID} value={c.PartyID}>{c.PartyName}</option>)}
-          </select>
+          <Select
+            options={customerOptions}
+            value={customerOptions.find(opt => opt.value === customerId) || null}
+            onChange={(selected) => setCustomerId(selected ? selected.value : '')}
+            isSearchable
+            isClearable
+            placeholder="Search customers..."
+            className="w-full md:w-1/2 text-gray-900 text-sm"
+            classNamePrefix="erp-select"
+          />
         </div>
 
         {/* DETAILS: Dynamic Product Rows */}
@@ -188,18 +200,16 @@ const filteredOrders = (salesOrders || []).filter(so =>
             <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
               <div className="md:col-span-5 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Product</label>
-                <select 
-                  value={item.productId} 
-                  onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>-- Select Product --</option>
-                  {(products || []).map(p => (
-                    <option key={p.ProductID} value={p.ProductID}>
-                      {p.ProductName} (Stock: {p.ClosingBalance || 0})
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(opt => opt.value === item.productId) || null}
+                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search products..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="md:col-span-3 flex flex-col gap-1">

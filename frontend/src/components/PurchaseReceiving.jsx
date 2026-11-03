@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function PurchaseReceiving() {
   const [pendingPOs, setPendingPOs] = useState([]);
@@ -41,6 +42,19 @@ export default function PurchaseReceiving() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const purchaseOrderOptions = pendingPOs.map(po => ({
+    value: String(po.PO_ID),
+    label: `${po.PONumber} (${po.VendorName})`
+  }));
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: p.ProductName
+  }));
+  const tankOptions = tanks.map(t => ({
+    value: String(t.TankID),
+    label: `${t.TankName} (Current: ${t.CurrentStock} | Max: ${t.Capacity})`
+  }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,30 +104,30 @@ export default function PurchaseReceiving() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500 uppercase">Link to Purchase Order</label>
-            <select 
-              value={poId} 
-              onChange={(e) => setPoId(e.target.value)} 
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="" disabled>-- Select Pending PO --</option>
-              {(pendingPOs || []).map(po => (
-                <option key={po.PO_ID} value={po.PO_ID}>{po.PONumber} ({po.VendorName})</option>
-              ))}
-            </select>
+            <Select
+              options={purchaseOrderOptions}
+              value={purchaseOrderOptions.find(opt => opt.value === poId) || null}
+              onChange={(selected) => setPoId(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search pending purchase orders..."
+              className="w-full text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
 
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500 uppercase">Received Product</label>
-            <select 
-              value={productId} 
-              onChange={(e) => setProductId(e.target.value)} 
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="" disabled>-- Select Product --</option>
-              {(products || []).map(p => (
-                <option key={p.ProductID} value={p.ProductID}>{p.ProductName}</option>
-              ))}
-            </select>
+            <Select
+              options={productOptions}
+              value={productOptions.find(opt => opt.value === productId) || null}
+              onChange={(selected) => setProductId(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search products..."
+              className="w-full text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
         </div>
 
@@ -121,16 +135,16 @@ export default function PurchaseReceiving() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-6 bg-gray-50 p-4 border border-gray-200 rounded-xl">
           <div className="flex flex-col gap-1 md:col-span-2">
             <label className="text-xs font-semibold text-gray-500 uppercase">Destination Tank</label>
-            <select 
-              value={tankId} 
-              onChange={(e) => setTankId(e.target.value)} 
-              className="w-full p-3 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            >
-              <option value="" disabled>-- Select Storage Tank --</option>
-              {(tanks || []).map(t => (
-                <option key={t.TankID} value={t.TankID}>{t.TankName} (Current: {t.CurrentStock} | Max: {t.Capacity})</option>
-              ))}
-            </select>
+            <Select
+              options={tankOptions}
+              value={tankOptions.find(opt => opt.value === tankId) || null}
+              onChange={(selected) => setTankId(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search storage tanks..."
+              className="w-full text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
 
           <div className="flex flex-col gap-1 md:col-span-1">

@@ -55,6 +55,22 @@ export default function ProductMaster({ user }) {
   }));
 
   const selectedBrandOption = brandOptions.find(opt => opt.value === brandId) || null;
+  const materialTypeOptions = [
+    { value: 'Finished Good', label: 'Finished Good (For Sale)' },
+    { value: 'Raw Material', label: 'Raw Material (For Production)' },
+    { value: 'Packaging', label: 'Packaging Material' }
+  ];
+  const itemStateOptions = [
+    { value: 'Solid', label: 'Solid (Warehouse Storage)' },
+    { value: 'Liquid', label: 'Liquid (Tank Storage)' }
+  ];
+  const unitOfMeasureOptions = [
+    { value: 'Pcs', label: 'Pieces (Pcs)' },
+    { value: 'Box', label: 'Boxes (Box)' },
+    { value: 'Kg', label: 'Kilograms (Kg)' },
+    { value: 'Liters', label: 'Liters (L)' },
+    { value: 'Tons', label: 'Tons (T)' }
+  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -177,42 +193,44 @@ export default function ProductMaster({ user }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-700 uppercase">Material Type</label>
-                <select 
-                  value={materialType} 
-                  onChange={(e) => setMaterialType(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="Finished Good">Finished Good (For Sale)</option>
-                  <option value="Raw Material">Raw Material (For Production)</option>
-                  <option value="Packaging">Packaging Material</option>
-                </select>
+                <Select
+                  options={materialTypeOptions}
+                  value={materialTypeOptions.find(opt => opt.value === materialType) || null}
+                  onChange={(selected) => setMaterialType(selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search material type..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-700 uppercase">Item State (Routing)</label>
-                <select 
-                  value={itemState} 
-                  onChange={(e) => setItemState(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="Solid">Solid (Warehouse Storage)</option>
-                  <option value="Liquid">Liquid (Tank Storage)</option>
-                </select>
+                <Select
+                  options={itemStateOptions}
+                  value={itemStateOptions.find(opt => opt.value === itemState) || null}
+                  onChange={(selected) => setItemState(selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search item state..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="flex flex-col gap-1">
                 <label className="text-xs font-bold text-gray-700 uppercase">Unit of Measure</label>
-                <select 
-                  value={unitOfMeasure} 
-                  onChange={(e) => setUnitOfMeasure(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                  <option value="Pcs">Pieces (Pcs)</option>
-                  <option value="Box">Boxes (Box)</option>
-                  <option value="Kg">Kilograms (Kg)</option>
-                  <option value="Liters">Liters (L)</option>
-                  <option value="Tons">Tons (T)</option>
-                </select>
+                <Select
+                  options={unitOfMeasureOptions}
+                  value={unitOfMeasureOptions.find(opt => opt.value === unitOfMeasure) || null}
+                  onChange={(selected) => setUnitOfMeasure(selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search unit..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
             </div>
 
@@ -223,9 +241,11 @@ export default function ProductMaster({ user }) {
                   options={brandOptions}
                   value={selectedBrandOption}
                   onChange={(selected) => setBrandId(selected ? selected.value : null)}
+                  isSearchable
                   isClearable
                   placeholder="Select a brand..."
                   className="text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
                   styles={{
                     control: (base) => ({
                       ...base, minHeight: '38px', borderColor: '#9ca3af', borderRadius: '0.25rem'

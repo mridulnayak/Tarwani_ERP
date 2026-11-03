@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Select from 'react-select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -41,6 +42,15 @@ export default function SalesDispatch() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const salesOrderOptions = pendingOrders.map(so => ({
+    value: String(so.SO_ID),
+    label: `${so.SONumber} (${so.CustomerName})`
+  }));
+  const productOptions = products.map(p => ({
+    value: String(p.ProductID),
+    label: `${p.ProductName} (Available Stock: ${p.ClosingBalance || 0})`
+  }));
 
   // NEW: Function to manually fetch dispatches by month
   const fetchDispatches = async () => {
@@ -170,16 +180,16 @@ export default function SalesDispatch() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
           <div className="flex flex-col gap-1 md:col-span-1">
             <label className="text-xs font-semibold text-gray-500 uppercase">Sales Order Reference</label>
-            <select 
-              value={soId} 
-              onChange={(e) => setSoId(e.target.value)}
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            >
-              <option value="" disabled>-- Select Pending Order --</option>
-              {(pendingOrders || []).map(so => (
-                <option key={so.SO_ID} value={so.SO_ID}>{so.SONumber} ({so.CustomerName})</option>
-              ))}
-            </select>
+            <Select
+              options={salesOrderOptions}
+              value={salesOrderOptions.find(opt => opt.value === soId) || null}
+              onChange={(selected) => setSoId(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search pending sales orders..."
+              className="w-full text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
 
           <div className="flex flex-col gap-1">
@@ -214,18 +224,16 @@ export default function SalesDispatch() {
               
               <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Finished Product</label>
-                <select 
-                  value={item.productId} 
-                  onChange={(e) => handleItemChange(index, 'productId', e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="" disabled>-- Select Finished Product --</option>
-                  {(products || []).map(p => (
-                    <option key={p.ProductID} value={p.ProductID}>
-                      {p.ProductName} (Available Stock: {p.ClosingBalance || 0})
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  options={productOptions}
+                  value={productOptions.find(opt => opt.value === item.productId) || null}
+                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  isSearchable
+                  isClearable
+                  placeholder="Search finished products..."
+                  className="w-full text-gray-900 text-sm"
+                  classNamePrefix="erp-select"
+                />
               </div>
 
               <div className="md:col-span-3 flex flex-col gap-1">
