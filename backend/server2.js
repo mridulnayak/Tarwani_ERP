@@ -1044,57 +1044,40 @@ app.post('/api/purchase-receiving', async (req, res) => {
 });
 
 // ==========================================
-// PRODUCTION ORDER ROUTES (BULLETPROOF FIX)
+// PRODUCTION ORDER ROUTES (CORRECTED SCHEMA)
 // ==========================================
-// 1. GET: Fetch all Production Orders safely
+
+// 1. GET: Fetch all Production Orders
 app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT 
-                po.ProductionOrderID, 
-                ISNULL(po.OrderNo, 'PRD-' + CAST(po.ProductionOrderID AS VARCHAR)) AS OrderNo,
-                ISNULL(po.OrderDate, GETDATE()) AS OrderDate, 
-                ISNULL(po.Status, 'Pending') AS Status,
-                ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
-                ISNULL(p.ProductName, 'Direct Production') AS ProductName
-            FROM mridul.ProductionOrder po
-            LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-            ORDER BY po.ProductionOrderID DESC
+                OrderID, 
+                OrderNo,
+                ISNULL(OrderDate, GETDATE()) AS OrderDate, 
+                ISNULL(Status, 'Pending') AS Status
+            FROM mridul.ProductionOrders
+            ORDER BY OrderID DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
         console.error('SQL Error in GET /api/production-orders:', err.message);
-        res.status(500).json({ error: err.message }); // Ye frontend par exact database error dikhayega agar koi column missing hua
+        res.status(500).json({ error: err.message });
     }
 });
 
-// 2. POST: Create Production Order safely
+// 2. POST: Create Production Order
 app.post('/api/production-orders', async (req, res) => {
     try {
-        const { productId, salesOrderRef, targetQuantity, items } = req.body;
-        
-        let targetProdId = productId;
-        let targetQty = targetQuantity;
-        let salesRef = salesOrderRef || null;
-
-        if (items && Array.isArray(items) && items.length > 0) {
-            targetProdId = items[0].productId;
-            targetQty = items[0].quantity || items[0].targetQuantity;
-        }
-
-        if (!targetProdId || !targetQty) {
-            return res.status(400).json({ error: 'Product and Target Quantity are required' });
-        }
-
         const pool = await sql.connect(dbConfig);
+        const orderNo = `PRD-${Date.now()}`;
+        
         await pool.request()
-            .input('productId', sql.Int, targetProdId)
-            .input('salesOrderRef', sql.VarChar, salesRef)
-            .input('targetQty', sql.Int, targetQty)
+            .input('orderNo', sql.VarChar, orderNo)
             .query(`
-                INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity, Status, OrderDate)
-                VALUES (@productId, @salesOrderRef, @targetQty, 'Pending', GETDATE())
+                INSERT INTO mridul.ProductionOrders (OrderNo, Status, OrderDate)
+                VALUES (@orderNo, 'Pending', GETDATE())
             `);
 
         res.status(201).json({ message: 'Production Order generated successfully!' });
@@ -1104,17 +1087,17 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// 3. POST: Delete/Cancel Production Order safely
+// 3. POST: Delete/Cancel Production Order
 app.post('/api/production-orders/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await sql.connect(dbConfig);
         
         const result = await pool.request()
-            .input('poId', sql.Int, id)
+            .input('id', sql.Int, id)
             .query(`
-                DELETE FROM mridul.ProductionOrder 
-                WHERE ProductionOrderID = @poId
+                DELETE FROM mridul.ProductionOrders 
+                WHERE OrderID = @id
             `);
         
         if (result.rowsAffected[0] === 0) {
@@ -1127,6 +1110,7 @@ app.post('/api/production-orders/delete/:id', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES
 // ==========================================
