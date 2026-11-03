@@ -1,369 +1,363 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
-export default function SalesDispatch() {
-  const [pendingOrders, setPendingOrders] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [dispatchHistory, setDispatchHistory] = useState([]);
+export default function SalesDispatch({ user }) {
+  const [salesOrders, setSalesOrders] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [dispatches, setDispatches] = useState([]);
+
+  // View Mode: 'list' or 'create'
+  const [viewMode, setViewMode] = useState('list');
 
   // Form State
-  const [soId, setSoId] = useState('');
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [dispatchedBy, setDispatchedBy] = useState('');
-  const [items, setItems] = useState([{ productId: '', quantity: 1 }]);
+  const [selectedSoId, setSelectedSoId] = useState('');
+  const [receivedById, setReceivedById] = useState('');
+  const [vehicleNo, setVehicleNo] = useState('');
+  const [remarks, setRemarks] = useState('');
+  
+  // Sequential Items Loaded for Delivery
+  const [dispatchItems, setDispatchItems] = useState([]);
+  const [currentProduct, setCurrentProduct] = useState({ productId: '', quantity: 1 });
+  const [soItemsList, setSoItemsList] = useState([]);
 
-  // NEW: State for the month picker (Format: YYYY-MM)
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
-        method: 'GET',
-        headers: { 'x-access-token': token }
-      });
-      const soData = await soRes.json();
-      setPendingOrders(Array.isArray(soData) ? soData.filter(so => so.Status === 'Pending') : []);
-
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
-        method: 'GET',
-        headers: { 'x-access-token': token }
-      });
-      const prodData = await prodRes.json();
-      setProducts(Array.isArray(prodData) ? prodData : []);
       
-      // We removed the automatic dispatch history fetch from here!
-      // It will now only load when the user specifically asks for it.
-    } catch (error) {
-      console.error("Error fetching initial data:", error);
-    }
-  };
-
-  useEffect(() => { fetchData(); }, []);
-
-  const salesOrderOptions = pendingOrders.map(so => ({
-    value: String(so.SO_ID),
-    label: `${so.SONumber} (${so.CustomerName})`
-  }));
-  const productOptions = products.map(p => ({
-    value: String(p.ProductID),
-    label: `${p.ProductName} (Available Stock: ${p.ClosingBalance || 0})`
-  }));
-
-  // NEW: Function to manually fetch dispatches by month
-  const fetchDispatches = async () => {
-    if (!selectedMonth) {
-      alert("Please select a month and year first.");
-      return;
-    }
-
-    // Split "2026-10" into year and month
-    const [year, month] = selectedMonth.split('-'); 
-    
-    try {
-      const token = localStorage.getItem('erp_token');
-      const dispatchRes = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-dispatch?month=${month}&year=${year}`, {
-        method: 'GET',
+      // Fetch Approved/Pending Sales Orders
+      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
         headers: { 'x-access-token': token }
       });
-      const dispatchData = await dispatchRes.json();
-      setDispatchHistory(Array.isArray(dispatchData) ? dispatchData : []);
+      const soData = soRes.ok ? await soRes.json() : [];
+      setSalesOrders(Array.isArray(soData) ? soData : []);
+
+      // Fetch Employees for "Received By" dropdown
+      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+        headers: { 'x-access-token': token }
+      });
+      const partyData = partyRes.ok ? await partyRes.json() : [];
+      setEmployees(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Employee') : []);
+
+      // Fetch Existing Dispatches
+      const dispRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
+        headers: { 'x-access-token': token }
+      });
+      const dispData = dispRes.ok ? await dispRes.json() : [];
+      setDispatches(Array.isArray(dispData) ? dispData : []);
     } catch (error) {
       console.error("Error fetching dispatch data:", error);
     }
   };
 
-  const handleAddItem = () => setItems([...items, { productId: '', quantity: 1 }]);
-  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
+  useEffect(() => { fetchData(); }, []);
 
-// --- PDF GENERATION LOGIC ---
-  const generateInvoice = (dispatchRecord) => {
-    const doc = new jsPDF();
-    
-    // 1. Company Header
-    doc.setFontSize(22);
-    doc.setTextColor(41, 128, 185); // Professional Blue
-    doc.text("TARWANI SOAPS", 105, 20, { align: "center" });
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Factory Dispatch Invoice & Delivery Challan", 105, 28, { align: "center" });
-    doc.line(14, 32, 196, 32); // Horizontal Divider
-
-    // 2. Dispatch Metadata
-    doc.setFontSize(11);
-    doc.setTextColor(40, 40, 40);
-    doc.text(`Date: ${new Date(dispatchRecord.DispatchDate).toLocaleDateString()}`, 14, 42);
-    doc.text(`Sales Order Ref: ${dispatchRecord.SONumber}`, 14, 49);
-    doc.text(`Vehicle Number: ${dispatchRecord.VehicleNumber || 'N/A'}`, 14, 56);
-    doc.text(`Authorized Dispatcher: ${dispatchRecord.DispatchedBy}`, 14, 63);
-
-    // 3. Items Table (UPDATED TO STANDALONE FUNCTION FOR VITE/CAPACITOR)
-    autoTable(doc, {
-      startY: 72,
-      headStyles: { fillColor: [41, 128, 185], textColor: [255, 255, 255] },
-      head: [['S.No', 'Finished Product Description', 'Dispatched Qty']],
-      body: [
-        ['1', dispatchRecord.ProductName, `${dispatchRecord.DispatchedQty} Units`]
-      ],
-      theme: 'grid',
-    });
-
-    // 4. Footer & Signatures
-    const finalY = doc.lastAutoTable.finalY + 30;
-    doc.setFontSize(10);
-    doc.text("Receiver's Signature", 30, finalY);
-    doc.line(20, finalY - 5, 70, finalY - 5);
-    
-    doc.text("Authorized Signatory", 140, finalY);
-    doc.line(130, finalY - 5, 180, finalY - 5);
-
-    doc.setFontSize(8);
-    doc.setTextColor(150, 150, 150);
-    doc.text("Generated by Tarwani Soaps ERP System", 105, 285, { align: "center" });
-
-    // Trigger Download
-    doc.save(`Challan_${dispatchRecord.SONumber}.pdf`);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!soId || !dispatchedBy) return alert("Please select a Sales Order and enter the Dispatcher's Name.");
-
-    const invalidItem = items.find(item => !item.productId || item.quantity <= 0);
-    if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
+  // When a Sales Order is selected, fetch its pending items
+  const handleSalesOrderChange = async (soId) => {
+    setSelectedSoId(soId);
+    setDispatchItems([]);
+    if (!soId) {
+      setSoItemsList([]);
+      return;
+    }
 
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatch', {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/items`, {
+        headers: { 'x-access-token': token }
+      });
+      const data = res.ok ? await res.json() : [];
+      setSoItemsList(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Error fetching SO items:", err);
+      setSoItemsList([]);
+    }
+  };
+
+  const soOptions = salesOrders.map(so => ({
+    value: String(so.SO_ID || so.SalesOrderID),
+    label: `${so.SONumber} - ${so.CustomerName || 'Customer'}`
+  }));
+
+  const employeeOptions = employees.map(emp => ({
+    value: String(emp.PartyID),
+    label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
+  }));
+
+  const productOptions = soItemsList.map(item => ({
+    value: String(item.ProductID),
+    label: `${item.ProductName} (Ordered: ${item.Quantity})`
+  }));
+
+  const handleAddDispatchItem = () => {
+    if (!currentProduct.productId) return alert("Please select a product from the order items.");
+    if (currentProduct.quantity <= 0) return alert("Quantity must be greater than zero.");
+
+    setDispatchItems([...dispatchItems, { ...currentProduct }]);
+    setCurrentProduct({ productId: '', quantity: 1 });
+  };
+
+  const handleRemoveDispatchItem = (index) => {
+    setDispatchItems(dispatchItems.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitDispatch = async (e) => {
+    e.preventDefault();
+    if (!selectedSoId) return alert("Please select a Sales Order.");
+    if (!receivedById) return alert("Please select who received the delivery ('Received By').");
+    if (dispatchItems.length === 0) return alert("Please add at least one loaded item for delivery.");
+
+    try {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ soId, vehicleNumber, dispatchedBy, items })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
+        body: JSON.stringify({ 
+          salesOrderId: selectedSoId, 
+          receivedById, 
+          vehicleNo, 
+          remarks, 
+          items: dispatchItems 
+        })
       });
 
       if (res.ok) {
-        alert("Dispatch Logged Successfully! Inventory Deducted.");
-        setSoId('');
-        setVehicleNumber('');
-        setDispatchedBy('');
-        setItems([{ productId: '', quantity: 1 }]);
-        fetchData(); 
-        
-        // If they already have a month selected, refresh the list
-        if (selectedMonth) fetchDispatches();
+        setSelectedSoId('');
+        setReceivedById('');
+        setVehicleNo('');
+        setRemarks('');
+        setDispatchItems([]);
+        setSoItemsList([]);
+        setViewMode('list');
+        fetchData();
+        alert("Daily Dispatch entry recorded successfully!");
       } else {
-        alert("Failed to process dispatch. Check stock levels.");
+        alert("Failed to save dispatch entry.");
       }
     } catch (error) {
-      console.error("Error processing dispatch:", error);
+      console.error("Error submitting dispatch:", error);
     }
   };
+
+  const filteredDispatches = (dispatches || []).filter(d => 
+    (d.DispatchNo && d.DispatchNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (d.CustomerName && d.CustomerName.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Outbound Sales Dispatch</h2>
-        <p className="text-sm text-gray-500 mt-1">Manage truck loading, verify available stock, and process customer dispatches.</p>
+      {/* HEADER WITH TOGGLE BUTTONS */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Daily Dispatch Management</h2>
+          <p className="text-sm text-gray-500 mt-1">Record outbound shipments, link delivery personnel, and track trucks.</p>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            📋 View List ({dispatches.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('create')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'create' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            ＋ Add New Dispatch
+          </button>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="p-5 md:p-6">
-        
-        {/* HEADER DETAILS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Sales Order Reference</label>
-            <Select
-              options={salesOrderOptions}
-              value={salesOrderOptions.find(opt => opt.value === soId) || null}
-              onChange={(selected) => setSoId(selected ? selected.value : '')}
-              isSearchable
-              isClearable
-              placeholder="Search pending sales orders..."
-              className="w-full text-gray-900 text-sm"
-              classNamePrefix="erp-select"
+      {/* VIEW MODE: LIST */}
+      {viewMode === 'list' && (
+        <div>
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Existing Dispatch Records</h3>
+            <input 
+              type="text" 
+              placeholder="Search dispatches..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full md:w-1/3 p-2 bg-white border border-gray-300 rounded-lg text-sm"
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Vehicle Number</label>
-            <input 
-              type="text" 
-              value={vehicleNumber} 
-              onChange={(e) => setVehicleNumber(e.target.value)}
-              placeholder="e.g., CG-04-XX-1234"
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Dispatched By</label>
-            <input 
-              type="text" 
-              value={dispatchedBy} 
-              onChange={(e) => setDispatchedBy(e.target.value)}
-              placeholder="Warehouse Staff Name"
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            />
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Dispatch No</th>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Customer / SO</th>
+                  <th className="px-6 py-4 font-semibold">Received By</th>
+                  <th className="px-6 py-4 font-semibold">Vehicle No</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredDispatches.map((d, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 bg-white">
+                    <td className="px-6 py-4 font-bold text-blue-600">{d.DispatchNo || `DSP-${idx+1}`}</td>
+                    <td className="px-6 py-4 text-gray-500">{new Date(d.DispatchDate || Date.now()).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">{d.CustomerName || 'N/A'}</td>
+                    <td className="px-6 py-4">{d.ReceivedByName || 'N/A'}</td>
+                    <td className="px-6 py-4 font-mono">{d.VehicleNo || 'N/A'}</td>
+                  </tr>
+                ))}
+                {filteredDispatches.length === 0 && (
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No dispatch records found.</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
+      )}
 
-        {/* ITEMS DISPATCHED SECTION */}
-        <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
-          <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Items Loaded for Delivery</h3>
+      {/* VIEW MODE: CREATE FORM */}
+      {viewMode === 'create' && (
+        <form onSubmit={handleSubmitDispatch} className="p-5 md:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Sales Order *</label>
+              <Select
+                options={soOptions}
+                value={soOptions.find(opt => opt.value === selectedSoId) || null}
+                onChange={(selected) => handleSalesOrderChange(selected ? selected.value : '')}
+                isSearchable
+                isClearable
+                placeholder="Search sales orders..."
+                className="text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Received By (Employee) *</label>
+              <Select
+                options={employeeOptions}
+                value={employeeOptions.find(opt => opt.value === receivedById) || null}
+                onChange={(selected) => setReceivedById(selected ? selected.value : '')}
+                isSearchable
+                isClearable
+                placeholder="Search employee / driver..."
+                className="text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
+            </div>
+          </div>
 
-          {(items || []).map((item, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
-              
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Vehicle Number</label>
+              <input 
+                type="text" 
+                value={vehicleNo} 
+                onChange={(e) => setVehicleNo(e.target.value)}
+                placeholder="e.g. CG-04-AB-1234"
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-900"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Remarks / Notes</label>
+              <input 
+                type="text" 
+                value={remarks} 
+                onChange={(e) => setRemarks(e.target.value)}
+                placeholder="Optional notes..."
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-900"
+              />
+            </div>
+          </div>
+
+          {/* Sequential Item Loading Box */}
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+            <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Load Items for Delivery (Sequential)</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-4">
               <div className="md:col-span-8 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Finished Product</label>
+                <label className="text-xs font-semibold text-gray-400 uppercase">Product from Order</label>
                 <Select
                   options={productOptions}
-                  value={productOptions.find(opt => opt.value === item.productId) || null}
-                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  value={productOptions.find(opt => opt.value === currentProduct.productId) || null}
+                  onChange={(selected) => setCurrentProduct({ ...currentProduct, productId: selected ? selected.value : '' })}
                   isSearchable
                   isClearable
-                  placeholder="Search finished products..."
-                  className="w-full text-gray-900 text-sm"
+                  placeholder="Select ordered product..."
+                  className="text-gray-900 text-sm"
                   classNamePrefix="erp-select"
                 />
               </div>
 
-              <div className="md:col-span-3 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Qty Dispatched</label>
+              <div className="md:col-span-2 flex flex-col gap-1">
+                <label className="text-xs font-semibold text-gray-400 uppercase">Dispatch Qty</label>
                 <input 
                   type="number" min="1"
-                  value={item.quantity} 
-                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
-                  placeholder="Qty"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  value={currentProduct.quantity} 
+                  onChange={(e) => setCurrentProduct({ ...currentProduct, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="p-2 bg-gray-50 border border-gray-300 rounded text-sm"
                 />
               </div>
 
-              <div className="md:col-span-1">
-                {items.length > 1 && (
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveItem(index)}
-                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors"
-                  >
-                    X
-                  </button>
-                )}
+              <div className="md:col-span-2">
+                <button 
+                  type="button" 
+                  onClick={handleAddDispatchItem}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs shadow"
+                >
+                  + Add Item
+                </button>
               </div>
             </div>
-          ))}
+
+            {/* Loaded Items Table */}
+            <div className="overflow-x-auto bg-white rounded border border-gray-200">
+              <table className="w-full text-left text-xs text-gray-700">
+                <thead className="bg-gray-100 uppercase border-b">
+                  <tr>
+                    <th className="p-2.5">Product</th>
+                    <th className="p-2.5">Quantity Loaded</th>
+                    <th className="p-2.5 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {dispatchItems.map((it, idx) => {
+                    const pObj = soItemsList.find(p => String(p.ProductID) === String(it.productId));
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="p-2.5 font-semibold">{pObj ? pObj.ProductName : 'Product'}</td>
+                        <td className="p-2.5 font-mono">{it.quantity} Units</td>
+                        <td className="p-2.5 text-center">
+                          <button type="button" onClick={() => handleRemoveDispatchItem(idx)} className="text-red-600 underline font-bold">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {dispatchItems.length === 0 && (
+                    <tr><td colSpan="3" className="p-4 text-center text-gray-400">No items loaded yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <button 
-            type="button" 
-            onClick={handleAddItem}
-            className="mt-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-sm transition-colors"
+            type="submit" 
+            disabled={dispatchItems.length === 0}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl shadow text-base"
           >
-            + Add Another Product
+            Confirm & Complete Dispatch ({dispatchItems.length} Items)
           </button>
-        </div>
-
-        <button 
-          type="submit" 
-          className="w-full py-3.5 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-cyan-300"
-        >
-          Confirm Dispatch & Deduct Inventory
-        </button>
-      </form>
-
-      {/* RECENT DISPATCHES TABLE / CARDS */}
-      <div className="border-t border-gray-200">
-        
-        {/* NEW: Filter Header */}
-        <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
-          <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Dispatch Ledger & Documents</h3>
-          <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
-            <input 
-              type="month" 
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="p-2 border border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500"
-            />
-            <button 
-              onClick={fetchDispatches}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors shadow-sm"
-            >
-              Load Month
-            </button>
-          </div>
-        </div>
-
-        {/* MOBILE VIEW: Cards */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {(dispatchHistory || []).map((d) => (
-            <div key={d.DispatchID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-blue-600">{d.SONumber}</span>
-                <span className="text-xs text-gray-400">{new Date(d.DispatchDate).toLocaleDateString()}</span>
-              </div>
-              <div className="text-sm text-gray-600 flex flex-col gap-1 mb-3">
-                <p>📦 Product: <span className="font-semibold text-gray-900">{d.ProductName}</span></p>
-                <p>Qty Dispatched: <span className="font-bold text-red-600">-{d.DispatchedQty}</span></p>
-                <p>🚚 Vehicle / Staff: <span className="text-gray-800">{d.VehicleNumber} | {d.DispatchedBy}</span></p>
-              </div>
-              <button 
-                onClick={() => generateInvoice(d)}
-                className="w-full py-2 bg-gray-800 text-white text-xs font-bold rounded flex items-center justify-center gap-2 hover:bg-gray-900"
-              >
-                <span>🖨️</span> Print PDF Invoice
-              </button>
-            </div>
-          ))}
-          {dispatchHistory.length === 0 && (
-            <div className="p-6 text-center text-gray-500 text-sm">Select a month and click 'Load Month' to view records.</div>
-          )}
-        </div>
-
-        {/* DESKTOP VIEW: Table */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Date</th>
-                <th className="px-6 py-4 font-semibold">Sales Order</th>
-                <th className="px-6 py-4 font-semibold">Product</th>
-                <th className="px-6 py-4 font-semibold">Qty</th>
-                <th className="px-6 py-4 font-semibold">Vehicle / Staff</th>
-                <th className="px-6 py-4 font-semibold text-right">Document</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {(dispatchHistory || []).map((d) => (
-                <tr key={d.DispatchID} className="hover:bg-gray-50 bg-white">
-                  <td className="px-6 py-4 text-gray-500">{new Date(d.DispatchDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-bold text-blue-600">{d.SONumber}</td>
-                  <td className="px-6 py-4 font-semibold text-gray-900">{d.ProductName}</td>
-                  <td className="px-6 py-4 font-bold text-red-600">-{d.DispatchedQty}</td>
-                  <td className="px-6 py-4 text-gray-700">{d.VehicleNumber} <span className="text-gray-300 mx-1">|</span> {d.DispatchedBy}</td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => generateInvoice(d)}
-                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded transition-colors flex items-center gap-1 ml-auto"
-                    >
-                      <span>🖨️</span> PDF
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {dispatchHistory.length === 0 && (
-                <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">Select a month and click 'Load Month' to view records.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </form>
+      )}
     </div>
   );
 }

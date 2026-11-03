@@ -1,182 +1,200 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
 
-export default function IssualManagement() {
-  const [productionOrders, setProductionOrders] = useState([]);
-  const [tanks, setTanks] = useState([]);
+export default function IssualManagement({ user }) {
   const [products, setProducts] = useState([]);
-  const [issuals, setIssuals] = useState([]);
+  const [issuances, setIssuances] = useState([]);
+
+  // View Mode: 'list' or 'create'
+  const [viewMode, setViewMode] = useState('list');
 
   // Form State
-  const [productionOrderId, setProductionOrderId] = useState('');
-  const [issuedBy, setIssuedBy] = useState('');
-  const [items, setItems] = useState([{ tankId: '', productId: '', quantity: 1 }]);
+  const [department, setDepartment] = useState('Production Floor');
+  const [currentItem, setCurrentItem] = useState({ productId: '', quantity: 1 });
+  const [issuedItems, setIssuedItems] = useState([]);
+
+  const [searchTerm, setSearchTerm] = useState('');
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
-        method: 'GET',
-        headers: { 'x-access-token': token }
-      });
-      const poData = await poRes.json();
-      setProductionOrders(Array.isArray(poData) ? poData.filter(po => po.Status === 'Pending') : []);
-
-      const tankRes = await fetch('https://sms.uvtechsolutions.co.in/api/tanks', {
-        method: 'GET',
-        headers: { 'x-access-token': token }
-      });
-      const tankData = await tankRes.json();
-      setTanks(Array.isArray(tankData) ? tankData : []);
-
       const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
-        method: 'GET',
         headers: { 'x-access-token': token }
       });
-      const prodData = await prodRes.json();
+      const prodData = prodRes.ok ? await prodRes.json() : [];
       setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const issueRes = await fetch('https://sms.uvtechsolutions.co.in/api/issuals', {
-        method: 'GET',
+      const issRes = await fetch('https://sms.uvtechsolutions.co.in/api/stock-issuances', {
         headers: { 'x-access-token': token }
       });
-      const issueData = await issueRes.json();
-      setIssuals(Array.isArray(issueData) ? issueData : []);
+      const issData = issRes.ok ? await issRes.json() : [];
+      setIssuances(Array.isArray(issData) ? issData : []);
     } catch (error) {
-      console.error("Error fetching data:", error);
+      console.error("Error fetching issual data:", error);
     }
   };
 
   useEffect(() => { fetchData(); }, []);
 
-  const productionOrderOptions = productionOrders.map(po => ({
-    value: String(po.ProductionOrderID),
-    label: `${po.ProductName} | Target: ${po.TargetQuantity} (Date: ${new Date(po.OrderDate).toLocaleDateString()})`
-  }));
-  const tankOptions = tanks.map(t => ({
-    value: String(t.TankID),
-    label: `${t.TankName} (Stock: ${t.CurrentStock})`
-  }));
   const productOptions = products.map(p => ({
     value: String(p.ProductID),
-    label: p.ProductName
+    label: `${p.ProductName} (Stock Available: ${p.ClosingBalance || 0})`
   }));
 
-  // --- DYNAMIC ROW HANDLERS ---
-  const handleAddItem = () => {
-    setItems([...items, { tankId: '', productId: '', quantity: 1 }]);
+  const departmentOptions = [
+    { value: 'Production Floor', label: 'Production Floor' },
+    { value: 'Packaging', label: 'Packaging Unit' },
+    { value: 'Quality Control', label: 'Quality Control' }
+  ];
+
+  const handleAddIssuedItem = () => {
+    if (!currentItem.productId) return alert("Please select a raw material.");
+    if (currentItem.quantity <= 0) return alert("Quantity must be greater than zero.");
+
+    setIssuedItems([...issuedItems, { ...currentItem }]);
+    setCurrentItem({ productId: '', quantity: 1 });
   };
 
-  const handleRemoveItem = (index) => {
-     setItems((items || []).filter((_, i) => i !== index));
+  const handleRemoveIssuedItem = (index) => {
+    setIssuedItems(issuedItems.filter((_, i) => i !== index));
   };
 
-
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    newItems[index][field] = value;
-    setItems(newItems);
-  };
-
-  // --- SUBMIT HANDLER ---
-  const handleSubmit = async (e) => {
+  const handleSubmitIssual = async (e) => {
     e.preventDefault();
-    if (!productionOrderId || !issuedBy) return alert("Please select a Production Order and enter Issuer Name.");
-    
-    const invalidItem = items.find(item => !item.tankId || !item.productId || item.quantity <= 0);
-    if (invalidItem) return alert("Please select a Tank, Product, and valid Quantity for all rows.");
+    if (issuedItems.length === 0) return alert("Please add at least one material to issue.");
 
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/issuals', {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/stock-issuances', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productionOrderId, issuedBy, items })
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
+        body: JSON.stringify({ department, items: issuedItems })
       });
-      
+
       if (res.ok) {
-        alert("Materials Issued Successfully! Tank stocks have been deducted.");
-        setProductionOrderId('');
-        setIssuedBy('');
-        setItems([{ tankId: '', productId: '', quantity: 1 }]);
+        setIssuedItems([]);
+        setViewMode('list');
         fetchData();
+        alert("Stock issued successfully to the floor!");
       } else {
-        alert("Failed to issue materials. Check tank stock limits.");
+        alert("Failed to issue stock.");
       }
     } catch (error) {
-      console.error("Error issuing materials:", error);
+      console.error("Error submitting stock issual:", error);
     }
   };
+
+  const filteredIssuances = (issuances || []).filter(i => 
+    (i.IssualNo && i.IssualNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
+    (i.Department && i.Department.toLowerCase().includes(searchTerm.toLowerCase()))
+  );
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50">
-        <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Issue Materials to Factory Floor</h2>
-        <p className="text-sm text-gray-500 mt-1">Deduct raw material stocks from storage tanks and assign items to active production orders.</p>
+      {/* HEADER WITH TOGGLE BUTTONS */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Physical Stock Issual</h2>
+          <p className="text-sm text-gray-500 mt-1">Issue raw materials and packaging supplies from store to the factory floor.</p>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'list' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            📋 View List ({issuances.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('create')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'create' ? 'bg-purple-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            ＋ Issue New Stock
+          </button>
+        </div>
       </div>
-      
-      <form onSubmit={handleSubmit} className="p-5 md:p-6">
-        
-        {/* HEADER DETAILS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-          <div className="flex flex-col gap-1 md:col-span-2">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Link to Production Order</label>
+
+      {/* VIEW MODE: LIST */}
+      {viewMode === 'list' && (
+        <div>
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Issuance History</h3>
+            <input 
+              type="text" 
+              placeholder="Search issuances..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full md:w-1/3 p-2 bg-white border border-gray-300 rounded-lg text-sm"
+            />
+          </div>
+
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">Issual No</th>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Department</th>
+                  <th className="px-6 py-4 font-semibold text-right">Items Issued</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredIssuances.map((iss, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 bg-white">
+                    <td className="px-6 py-4 font-bold text-purple-600">{iss.IssualNo || `ISS-${idx+1}`}</td>
+                    <td className="px-6 py-4 text-gray-500">{new Date(iss.IssualDate || Date.now()).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">{iss.Department || 'Production Floor'}</td>
+                    <td className="px-6 py-4 font-mono text-right">{iss.TotalItems || 1} Materials</td>
+                  </tr>
+                ))}
+                {filteredIssuances.length === 0 && (
+                  <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">No stock issuances found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MODE: CREATE FORM */}
+      {viewMode === 'create' && (
+        <form onSubmit={handleSubmitIssual} className="p-5 md:p-6">
+          <div className="mb-6">
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Target Department *</label>
             <Select
-              options={productionOrderOptions}
-              value={productionOrderOptions.find(opt => opt.value === productionOrderId) || null}
-              onChange={(selected) => setProductionOrderId(selected ? selected.value : '')}
-              isSearchable
-              isClearable
-              placeholder="Search pending production orders..."
-              className="w-full text-gray-900 text-sm"
+              options={departmentOptions}
+              value={departmentOptions.find(opt => opt.value === department) || departmentOptions[0]}
+              onChange={(selected) => setDepartment(selected ? selected.value : 'Production Floor')}
+              isSearchable={false}
+              className="w-full md:w-1/2 text-gray-900 text-sm"
               classNamePrefix="erp-select"
             />
           </div>
 
-          <div className="flex flex-col gap-1 md:col-span-1">
-            <label className="text-xs font-semibold text-gray-500 uppercase">Issued By</label>
-            <input 
-              type="text" 
-              value={issuedBy} 
-              onChange={(e) => setIssuedBy(e.target.value)}
-              placeholder="Store Keeper Name"
-              className="w-full p-3 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
-            />
-          </div>
-        </div>
-
-        {/* DETAILS: Dynamic Material Rows */}
-        <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
-          <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Materials Issued</h3>
-          
-          {(items || []).map((item, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
-              
-              <div className="md:col-span-5 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Deduct From Tank</label>
-                <Select
-                  options={tankOptions}
-                  value={tankOptions.find(opt => opt.value === item.tankId) || null}
-                  onChange={(selected) => handleItemChange(index, 'tankId', selected ? selected.value : '')}
-                  isSearchable
-                  isClearable
-                  placeholder="Search tanks..."
-                  className="w-full text-gray-900 text-sm"
-                  classNamePrefix="erp-select"
-                />
-              </div>
-
-              <div className="md:col-span-4 flex flex-col gap-1">
+          {/* Sequential Material Issual Box */}
+          <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+            <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Add Materials to Issue (Sequential)</h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-4">
+              <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
                 <Select
                   options={productOptions}
-                  value={productOptions.find(opt => opt.value === item.productId) || null}
-                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
+                  value={productOptions.find(opt => opt.value === currentItem.productId) || null}
+                  onChange={(selected) => setCurrentItem({ ...currentItem, productId: selected ? selected.value : '' })}
                   isSearchable
                   isClearable
                   placeholder="Search raw materials..."
-                  className="w-full text-gray-900 text-sm"
+                  className="text-gray-900 text-sm"
                   classNamePrefix="erp-select"
                 />
               </div>
@@ -184,101 +202,64 @@ export default function IssualManagement() {
               <div className="md:col-span-2 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Quantity</label>
                 <input 
-                  type="number" 
-                  min="1"
-                  value={item.quantity} 
-                  onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value))}
-                  placeholder="Qty"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  type="number" min="1"
+                  value={currentItem.quantity} 
+                  onChange={(e) => setCurrentItem({ ...currentItem, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                  className="p-2 bg-gray-50 border border-gray-300 rounded text-sm"
                 />
               </div>
 
-              <div className="md:col-span-1">
-                {items.length > 1 && (
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveItem(index)}
-                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors"
-                  >
-                    X
-                  </button>
-                )}
+              <div className="md:col-span-2">
+                <button 
+                  type="button" 
+                  onClick={handleAddIssuedItem}
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-xs shadow"
+                >
+                  + Add Item
+                </button>
               </div>
             </div>
-          ))}
+
+            {/* Issued Items Table */}
+            <div className="overflow-x-auto bg-white rounded border border-gray-200">
+              <table className="w-full text-left text-xs text-gray-700">
+                <thead className="bg-gray-100 uppercase border-b">
+                  <tr>
+                    <th className="p-2.5">Raw Material Description</th>
+                    <th className="p-2.5">Quantity to Issue</th>
+                    <th className="p-2.5 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {issuedItems.map((it, idx) => {
+                    const pObj = products.find(p => String(p.ProductID) === String(it.productId));
+                    return (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="p-2.5 font-semibold">{pObj ? pObj.ProductName : 'Material'}</td>
+                        <td className="p-2.5 font-mono">{it.quantity} Units</td>
+                        <td className="p-2.5 text-center">
+                          <button type="button" onClick={() => handleRemoveIssuedItem(idx)} className="text-red-600 underline font-bold">Remove</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {issuedItems.length === 0 && (
+                    <tr><td colSpan="3" className="p-4 text-center text-gray-400">No materials added for issual yet.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <button 
-            type="button" 
-            onClick={handleAddItem}
-            className="mt-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-sm transition-colors"
+            type="submit" 
+            disabled={issuedItems.length === 0}
+            className="w-full py-3.5 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white font-bold rounded-xl shadow text-base"
           >
-            + Add Another Material
+            Confirm & Issue Stock ({issuedItems.length} Materials)
           </button>
-        </div>
-
-        <button 
-          type="submit" 
-          className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-orange-300"
-        >
-          Issue Materials & Update Tanks
-        </button>
-      </form>
-
-      {/* ISSUAL HISTORY SECTION */}
-      <div className="border-t border-gray-200">
-        <div className="p-4 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Recent Issuals Ledger</h3>
-        </div>
-
-        {/* MOBILE VIEW: Cards */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {(issuals || []).map((issue) => (
-            <div key={issue.IssueID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-orange-600">{issue.IssueNumber}</span>
-                <span className="text-xs text-gray-400">{new Date(issue.IssueDate).toLocaleDateString()}</span>
-              </div>
-              <div className="text-sm text-gray-600 flex flex-col gap-1">
-                <p>📦 Target Product: <span className="font-semibold text-gray-900">{issue.TargetProduct}</span></p>
-                <p>Target Qty: <span className="font-bold text-gray-800">{issue.TargetQuantity}</span></p>
-                <p>👤 Issued By: <span className="text-gray-700">{issue.IssuedBy}</span></p>
-              </div>
-            </div>
-          ))}
-          {issuals.length === 0 && (
-            <div className="p-6 text-center text-gray-500">No materials issued yet.</div>
-          )}
-        </div>
-
-        {/* DESKTOP VIEW: Table */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold">Issue #</th>
-                <th className="px-6 py-4 font-semibold">Date</th>
-                <th className="px-6 py-4 font-semibold">Target Product</th>
-                <th className="px-6 py-4 font-semibold">Target Qty</th>
-                <th className="px-6 py-4 font-semibold">Issued By</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {(issuals || []).map((issue) => (
-                <tr key={issue.IssueID} className="hover:bg-gray-50 bg-white">
-                  <td className="px-6 py-4 font-bold text-orange-600">{issue.IssueNumber}</td>
-                  <td className="px-6 py-4 text-gray-500">{new Date(issue.IssueDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-semibold text-gray-900">{issue.TargetProduct}</td>
-                  <td className="px-6 py-4 font-bold text-gray-800">{issue.TargetQuantity}</td>
-                  <td className="px-6 py-4 text-gray-500">{issue.IssuedBy}</td>
-                </tr>
-              ))}
-              {issuals.length === 0 && (
-                <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No materials issued yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+        </form>
+      )}
     </div>
   );
 }

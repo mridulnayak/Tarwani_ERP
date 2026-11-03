@@ -8,10 +8,14 @@ export default function PurchaseOrder({ user }) {
   const [products, setProducts] = useState([]);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
 
+  // View Mode State: 'list' or 'create'
+  const [viewMode, setViewMode] = useState('list');
+
   // Form State
   const [vendorId, setVendorId] = useState('');
-  const [items, setItems] = useState([{ productId: '', quantity: 1, rate: 0 }]);
-  
+  const [currentItem, setCurrentItem] = useState({ productId: '', quantity: 1, rate: 0 });
+  const [orderItems, setOrderItems] = useState([]); // Sequential added materials list
+
   // Inline Quick-Add Vendor State
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [newVendorName, setNewVendorName] = useState('');
@@ -19,7 +23,7 @@ export default function PurchaseOrder({ user }) {
   const [newVendorAddress, setNewVendorAddress] = useState('');
   const [newVendorGst, setNewVendorGst] = useState('');
 
-  // Enterprise Features
+  // Search & Filter
   const [searchTerm, setSearchTerm] = useState('');
 
   const fetchData = async () => {
@@ -61,7 +65,7 @@ export default function PurchaseOrder({ user }) {
     label: p.ProductName
   }));
 
-  // --- QUICK ADD VENDOR HANDLER ---
+  // --- QUICK ADD VENDOR ---
   const handleQuickAddVendor = async (e) => {
     e.preventDefault();
     if (!newVendorName) return alert("Please enter Vendor Name.");
@@ -84,14 +88,11 @@ export default function PurchaseOrder({ user }) {
       });
 
       if (res.ok) {
-        // Clear quick-add form & close modal
         setNewVendorName('');
         setNewVendorPhone('');
         setNewVendorAddress('');
         setNewVendorGst('');
         setIsQuickAddOpen(false);
-        
-        // Refresh vendor list to pick up the new ID
         await fetchData();
         alert("Vendor created successfully!");
       } else {
@@ -99,25 +100,56 @@ export default function PurchaseOrder({ user }) {
         alert(`Failed to create vendor: ${errData.error || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error("Error creating quick-add vendor:", error);
+      console.error("Error creating vendor:", error);
       alert("Network error while creating vendor.");
     }
   };
 
-  const handleAddItem = () => setItems([...items, { productId: '', quantity: 1, rate: 0 }]);
-  const handleRemoveItem = (index) => setItems((items || []).filter((_, i) => i !== index));
-  
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...items];
-    if (field === 'quantity') {
-        newItems[index][field] = Math.max(1, parseInt(value) || 1);
-    } else {
-        newItems[index][field] = value;
-    }
-    setItems(newItems);
+  // --- SEQUENTIAL ITEM ADDITION HANDLERS ---
+  const handleAddSingleItem = () => {
+    if (!currentItem.productId) return alert("Please select a raw material.");
+    if (currentItem.quantity <= 0) return alert("Quantity must be greater than zero.");
+
+    setOrderItems([...orderItems, { ...currentItem }]);
+    setCurrentItem({ productId: '', quantity: 1, rate: 0 });
   };
 
-  // --- PDF GENERATION LOGIC ---
+  const handleRemoveOrderItem = (index) => {
+    setOrderItems(orderItems.filter((_, i) => i !== index));
+  };
+
+  // --- SUBMIT COMPLETE PURCHASE ORDER ---
+  const handleSubmitOrder = async (e) => {
+    e.preventDefault();
+    if (!vendorId) return alert("Please select a vendor.");
+    if (orderItems.length === 0) return alert("Please add at least one material to the order list.");
+
+    try {
+      const token = localStorage.getItem('erp_token');
+      const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'x-access-token': token 
+        },
+        body: JSON.stringify({ vendorId, items: orderItems })
+      });
+      
+      if (res.ok) {
+        setVendorId('');
+        setOrderItems([]);
+        setViewMode('list');
+        fetchData();
+        alert("Purchase Order issued successfully!");
+      } else {
+        alert("Failed to generate Purchase Order.");
+      }
+    } catch (error) {
+      console.error("Error submitting PO:", error);
+    }
+  };
+
+  // PDF Generation Logic
   const generatePurchaseOrderPDF = async (order) => {
     try {
       const token = localStorage.getItem('erp_token');
@@ -126,10 +158,9 @@ export default function PurchaseOrder({ user }) {
         headers: { 'x-access-token': token }
       });
       const orderItemsData = res.ok ? await res.json() : [];
-      const orderItems = Array.isArray(orderItemsData) ? orderItemsData : [];
+      const orderItemsList = Array.isArray(orderItemsData) ? orderItemsData : [];
 
       const doc = new jsPDF();
-      
       doc.setFontSize(22);
       doc.setTextColor(41, 128, 185);
       doc.text("TARWANI SOAPS", 105, 20, { align: "center" });
@@ -146,8 +177,8 @@ export default function PurchaseOrder({ user }) {
       doc.text(`Vendor Name: ${order.VendorName}`, 14, 56);
       doc.text(`Status: ${order.Status}`, 14, 63);
 
-      const tableRows = orderItems.length > 0 
-        ? (orderItems || []).map((item, index) => [
+      const tableRows = orderItemsList.length > 0 
+        ? orderItemsList.map((item, index) => [
             (index + 1).toString(),
             item.ProductName,
             `${item.Quantity} Units`
@@ -167,44 +198,10 @@ export default function PurchaseOrder({ user }) {
       doc.text("Authorized Purchasing Officer", 130, finalY);
       doc.line(125, finalY - 5, 190, finalY - 5);
 
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-      doc.text("Generated by Tarwani Soaps ERP System", 105, 285, { align: "center" });
-
       doc.save(`PurchaseOrder_${order.PONumber}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
       alert("Failed to load order items for PDF generation.");
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!vendorId) return alert("Please select a vendor.");
-    
-    const invalidItem = items.find(item => !item.productId || item.quantity <= 0);
-    if (invalidItem) return alert("Please select a product and enter a valid quantity for all rows.");
-
-    try {
-      const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-orders', {
-        method: 'POST',
-        headers: { 
-            'Content-Type': 'application/json',
-            'x-access-token': token 
-        },
-        body: JSON.stringify({ vendorId, items })
-      });
-      
-      if (res.ok) {
-        setVendorId('');
-        setItems([{ productId: '', quantity: 1, rate: 0 }]); 
-        fetchData(); 
-      } else {
-        alert("Failed to generate Purchase Order.");
-      }
-    } catch (error) {
-      console.error("Error submitting PO:", error);
     }
   };
 
@@ -217,248 +214,253 @@ export default function PurchaseOrder({ user }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER WITH USER BADGE */}
-      <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+      {/* HEADER WITH TOGGLE BUTTONS */}
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
-          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Generate Purchase Order</h2>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Purchase Orders Management</h2>
           <p className="text-sm text-gray-500 mt-1">Issue official POs to vendors for raw material procurement.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <button
             type="button"
-            onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow transition-colors"
+            onClick={() => setViewMode('list')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'list' ? 'bg-green-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
           >
-            {isQuickAddOpen ? '✕ Close Quick Add' : '+ Quick Add Vendor'}
+            📋 View List ({purchaseOrders.length})
           </button>
-          <div className="hidden md:flex bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1.5 rounded-full border border-blue-200 items-center gap-2">
-            <span>👤</span> Logged in as: {user?.username || 'Admin'}
-          </div>
+          <button
+            type="button"
+            onClick={() => setViewMode('create')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'create' ? 'bg-green-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            ＋ Add New Order
+          </button>
         </div>
       </div>
 
-      {/* INLINE QUICK ADD VENDOR FORM */}
-      {isQuickAddOpen && (
-        <div className="p-5 bg-green-50 border-b border-green-200">
-          <form onSubmit={handleQuickAddVendor} className="flex flex-col gap-4">
-            <h3 className="text-sm font-bold text-green-900 uppercase">Instant Vendor Registration</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div>
-                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Vendor Name *</label>
-                <input 
-                  type="text" 
-                  value={newVendorName} 
-                  onChange={(e) => setNewVendorName(e.target.value)} 
-                  placeholder="Enter vendor name..." 
-                  required
-                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
-                />
+      {/* VIEW MODE: LIST VIEW */}
+      {viewMode === 'list' && (
+        <div>
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Existing Purchase Orders</h3>
+            <div className="relative w-full md:w-1/3">
+              <input 
+                type="text" 
+                placeholder="Search by PO Number or Vendor..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-3 p-2 bg-white border border-gray-300 text-gray-900 rounded-lg shadow-sm text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
+          </div>
+
+          <div className="w-full overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-4 font-semibold">PO Number</th>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Vendor</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 font-semibold text-right">Document</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredOrders.map((po) => (
+                  <tr key={po.PO_ID} className="hover:bg-gray-50 bg-white">
+                    <td className="px-6 py-4 font-bold text-green-600">{po.PONumber}</td>
+                    <td className="px-6 py-4 text-gray-500">{new Date(po.OrderDate).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 font-bold text-gray-900">{po.VendorName}</td>
+                    <td className="px-6 py-4">
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${po.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
+                        {po.Status}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => generatePurchaseOrderPDF(po)}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded transition-colors inline-flex items-center gap-1 ml-auto"
+                      >
+                        <span>🖨️</span> PDF
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredOrders.length === 0 && (
+                  <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No purchase orders found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MODE: ADD NEW FORM (Sequential Item Entry) */}
+      {viewMode === 'create' && (
+        <div className="p-5 md:p-6">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-md font-bold text-gray-800 uppercase">Issue New Purchase Order</h3>
+            <button
+              type="button"
+              onClick={() => setIsQuickAddOpen(!isQuickAddOpen)}
+              className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded shadow transition-colors"
+            >
+              {isQuickAddOpen ? '✕ Close Quick Add' : '+ Quick Add Vendor'}
+            </button>
+          </div>
+
+          {/* INLINE QUICK ADD VENDOR FORM */}
+          {isQuickAddOpen && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-6">
+              <form onSubmit={handleQuickAddVendor} className="flex flex-col gap-3">
+                <h4 className="text-xs font-bold text-green-900 uppercase">Instant Vendor Registration</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <input 
+                    type="text" 
+                    value={newVendorName} 
+                    onChange={(e) => setNewVendorName(e.target.value)} 
+                    placeholder="Vendor Name *" 
+                    required
+                    className="p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                  <input 
+                    type="text" 
+                    value={newVendorPhone} 
+                    onChange={(e) => setNewVendorPhone(e.target.value)} 
+                    placeholder="Phone Number" 
+                    className="p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                  <input 
+                    type="text" 
+                    value={newVendorAddress} 
+                    onChange={(e) => setNewVendorAddress(e.target.value)} 
+                    placeholder="Address" 
+                    className="p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                  <input 
+                    type="text" 
+                    value={newVendorGst} 
+                    onChange={(e) => setNewVendorGst(e.target.value)} 
+                    placeholder="GST (Optional)" 
+                    className="p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <button type="submit" className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded shadow">
+                    Save & Select Vendor
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmitOrder}>
+            {/* Vendor Selection */}
+            <div className="mb-6">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Vendor *</label>
+              <Select
+                options={vendorOptions}
+                value={vendorOptions.find(opt => opt.value === vendorId) || null}
+                onChange={(selected) => setVendorId(selected ? selected.value : '')}
+                isSearchable
+                isClearable
+                placeholder="Search vendors..."
+                className="w-full md:w-1/2 text-gray-900 text-sm"
+                classNamePrefix="erp-select"
+              />
+            </div>
+
+            {/* Sequential Material Adder Box */}
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
+              <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Add Materials Required (One by One)</h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-4">
+                <div className="md:col-span-8 flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
+                  <Select
+                    options={productOptions}
+                    value={productOptions.find(opt => opt.value === currentItem.productId) || null}
+                    onChange={(selected) => setCurrentItem({ ...currentItem, productId: selected ? selected.value : '' })}
+                    isSearchable
+                    isClearable
+                    placeholder="Search materials..."
+                    className="text-gray-900 text-sm"
+                    classNamePrefix="erp-select"
+                  />
+                </div>
+
+                <div className="md:col-span-2 flex flex-col gap-1">
+                  <label className="text-xs font-semibold text-gray-400 uppercase">Quantity</label>
+                  <input 
+                    type="number" min="1"
+                    value={currentItem.quantity} 
+                    onChange={(e) => setCurrentItem({ ...currentItem, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
+                    className="p-2 bg-gray-50 border border-gray-300 text-gray-900 rounded-md text-sm"
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <button 
+                    type="button" 
+                    onClick={handleAddSingleItem}
+                    className="w-full py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-md text-xs shadow transition-colors"
+                  >
+                    + Add to List
+                  </button>
+                </div>
               </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Contact Number</label>
-                <input 
-                  type="text" 
-                  value={newVendorPhone} 
-                  onChange={(e) => setNewVendorPhone(e.target.value)} 
-                  placeholder="Phone..." 
-                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">Address</label>
-                <input 
-                  type="text" 
-                  value={newVendorAddress} 
-                  onChange={(e) => setNewVendorAddress(e.target.value)} 
-                  placeholder="Address..." 
-                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-gray-700 uppercase block mb-1">GST Number</label>
-                <input 
-                  type="text" 
-                  value={newVendorGst} 
-                  onChange={(e) => setNewVendorGst(e.target.value)} 
-                  placeholder="GST (Optional)..." 
-                  className="w-full p-2 bg-white border border-gray-300 rounded text-sm text-gray-900"
-                />
+
+              {/* Added Materials Grid Table */}
+              <div className="overflow-x-auto bg-white rounded border border-gray-200">
+                <table className="w-full text-left text-xs text-gray-700">
+                  <thead className="bg-gray-100 uppercase border-b border-gray-200">
+                    <tr>
+                      <th className="p-2.5">Raw Material Description</th>
+                      <th className="p-2.5">Quantity</th>
+                      <th className="p-2.5 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {orderItems.map((it, idx) => {
+                      const prodObj = products.find(p => String(p.ProductID) === String(it.productId));
+                      return (
+                        <tr key={idx} className="hover:bg-gray-50">
+                          <td className="p-2.5 font-semibold">{prodObj ? prodObj.ProductName : 'Unknown Material'}</td>
+                          <td className="p-2.5 font-mono">{it.quantity} Units</td>
+                          <td className="p-2.5 text-center">
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveOrderItem(idx)}
+                              className="text-red-600 hover:text-red-800 font-bold underline"
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {orderItems.length === 0 && (
+                      <tr><td colSpan="3" className="p-4 text-center text-gray-400 font-medium">No materials added to order yet. Use the fields above to add items sequentially.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <button 
-                type="submit" 
-                className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded shadow transition-colors"
-              >
-                Save & Select Vendor
-              </button>
-            </div>
+
+            <button 
+              type="submit" 
+              disabled={orderItems.length === 0}
+              className="w-full py-3.5 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-bold rounded-xl shadow transition-colors text-base"
+            >
+              Issue Purchase Order ({orderItems.length} Materials)
+            </button>
           </form>
         </div>
       )}
-      
-      <form onSubmit={handleSubmit} className="p-5 md:p-6">
-        <div className="mb-6">
-          <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Vendor</label>
-          <Select
-            options={vendorOptions}
-            value={vendorOptions.find(opt => opt.value === vendorId) || null}
-            onChange={(selected) => setVendorId(selected ? selected.value : '')}
-            isSearchable
-            isClearable
-            placeholder="Search vendors..."
-            className="w-full md:w-1/2 text-gray-900 text-sm"
-            classNamePrefix="erp-select"
-          />
-        </div>
-
-        <div className="bg-gray-50 p-4 md:p-5 rounded-xl border border-gray-200 mb-6">
-          <h3 className="text-md font-bold text-gray-800 uppercase mb-4">Materials Required</h3>
-          
-          {(items || []).map((item, index) => (
-            <div key={index} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end bg-white p-4 rounded-lg border border-gray-100 shadow-sm mb-3">
-              
-              <div className="md:col-span-8 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Raw Material</label>
-                <Select
-                  options={productOptions}
-                  value={productOptions.find(opt => opt.value === item.productId) || null}
-                  onChange={(selected) => handleItemChange(index, 'productId', selected ? selected.value : '')}
-                  isSearchable
-                  isClearable
-                  placeholder="Search materials..."
-                  className="w-full text-gray-900 text-sm"
-                  classNamePrefix="erp-select"
-                />
-              </div>
-
-              <div className="md:col-span-3 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase">Quantity</label>
-                <input 
-                  type="number" min="1"
-                  value={item.quantity} 
-                  onChange={(e) => handleItemChange(index, 'quantity', e.target.value)}
-                  placeholder="Qty"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
-
-              <div className="md:col-span-1">
-                {items.length > 1 && (
-                  <button 
-                    type="button" 
-                    onClick={() => handleRemoveItem(index)}
-                    className="w-full p-2.5 bg-red-100 hover:bg-red-200 text-red-700 font-bold rounded-md transition-colors text-sm"
-                  >
-                    X
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-
-          <button 
-            type="button" 
-            onClick={handleAddItem}
-            className="mt-2 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold rounded-lg text-sm transition-colors"
-          >
-            + Add Another Material
-          </button>
-        </div>
-
-        <button 
-          type="submit" 
-          className="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-sm transition-colors text-lg focus:ring-4 focus:ring-green-300"
-        >
-          Issue Purchase Order
-        </button>
-      </form>
-
-      {/* RECENT PURCHASE ORDERS SECTION */}
-      <div className="border-t border-gray-200">
-        <div className="p-4 bg-gray-50 border-b border-gray-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Recent Purchase Orders</h3>
-          <div className="relative w-full md:w-1/3">
-            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-              <span className="text-gray-400">🔍</span>
-            </div>
-            <input 
-              type="text" 
-              placeholder="Search by PO Number or Vendor..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 p-2 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm text-sm"
-            />
-          </div>
-        </div>
-
-        {/* MOBILE VIEW */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {(filteredOrders || []).map((po) => (
-            <div key={po.PO_ID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-green-600">{po.PONumber}</span>
-                <span className={`px-2 py-1 rounded-full text-xs font-bold ${po.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
-                  {po.Status}
-                </span>
-              </div>
-              <div className="text-sm text-gray-600 mb-4">
-                <p>🏢 Vendor: <span className="font-semibold text-gray-800">{po.VendorName}</span></p>
-                <p>📅 Date: {new Date(po.OrderDate).toLocaleDateString()}</p>
-              </div>
-              <button 
-                onClick={() => generatePurchaseOrderPDF(po)}
-                className="w-full py-2 bg-gray-800 text-white text-xs font-bold rounded flex items-center justify-center gap-2 hover:bg-gray-900"
-              >
-                <span>🖨️</span> Print PDF
-              </button>
-            </div>
-          ))}
-          {filteredOrders.length === 0 && (
-            <div className="p-6 text-center text-gray-500">No purchase orders found.</div>
-          )}
-        </div>
-
-        {/* DESKTOP VIEW */}
-        <div className="hidden md:block w-full overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-4 font-semibold">PO Number</th>
-                <th className="px-6 py-4 font-semibold">Date</th>
-                <th className="px-6 py-4 font-semibold">Vendor</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
-                <th className="px-6 py-4 font-semibold text-right">Document</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {(filteredOrders || []).map((po) => (
-                <tr key={po.PO_ID} className="hover:bg-gray-50 bg-white">
-                  <td className="px-6 py-4 font-bold text-green-600">{po.PONumber}</td>
-                  <td className="px-6 py-4 text-gray-500">{new Date(po.OrderDate).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 font-bold text-gray-900">{po.VendorName}</td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${po.Status === 'Pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}`}>
-                      {po.Status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => generatePurchaseOrderPDF(po)}
-                      className="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded transition-colors flex items-center gap-1 ml-auto"
-                    >
-                      <span>🖨️</span> PDF
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {filteredOrders.length === 0 && (
-                <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No purchase orders found.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }
