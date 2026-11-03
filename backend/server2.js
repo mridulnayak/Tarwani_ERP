@@ -712,34 +712,17 @@ app.post('/api/tanks/delete/:id', async (req, res) => {
     }
 });
 
-//GST & parties
-// 1. POST: Create a new Party
-// DELETE request ko POST method se bypass kar diya
-app.post('/api/parties/delete/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('id', sql.Int, id)
-            .query('DELETE FROM mridul.PartyMaster WHERE PartyID = @id');
-        
-        if (result.rowsAffected[0] === 0) {
-            return res.status(404).json({ error: 'Party not found' });
-        }
-        res.status(200).json({ message: 'Party deleted successfully!' });
-    } catch (err) { 
-        console.error('Error deleting party:', err);
-        res.status(500).json({ error: 'Failed to delete party.' }); 
-    }
-});
+// ==========================================
+// PARTY MASTER ROUTES
+// ==========================================
 
-// 2. GET: Fetch all Parties
+// 1. GET: Fetch all Parties with Designation details
 app.get('/api/parties', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT 
-                p.PartyID, p.PartyName, p.PartyType, p.ContactNumber, p.Address, p.GSTNumber, d.DesignationName 
+                p.PartyID, p.PartyName, p.PartyType, p.ContactNumber, p.Address, p.GSTNumber, p.DesignationID, d.DesignationName 
             FROM mridul.PartyMaster p
             LEFT JOIN mridul.DesignationMaster d ON p.DesignationID = d.DesignationID
             ORDER BY p.PartyType, p.PartyName
@@ -751,11 +734,41 @@ app.get('/api/parties', async (req, res) => {
     }
 });
 
-// 3. PUT: Update an existing Party (EDIT)
+// 2. POST: Create a new Party (Employee, Vendor, Customer)
+app.post('/api/parties', async (req, res) => {
+    try {
+        const { partyName, partyType, designationId, phone, address, gstNumber } = req.body;
+        
+        if (!partyName || !partyType) {
+            return res.status(400).json({ error: 'Party Name and Type are required' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('name', sql.VarChar, partyName)
+            .input('type', sql.VarChar, partyType)
+            .input('desigId', sql.Int, partyType === 'Employee' && designationId ? designationId : null)
+            .input('contact', sql.VarChar, partyType !== 'Employee' ? (phone || '') : '')
+            .input('address', sql.VarChar, partyType !== 'Employee' ? (address || '') : '')
+            .input('gst', sql.VarChar, partyType !== 'Employee' ? (gstNumber || '') : '')
+            .query(`
+                INSERT INTO mridul.PartyMaster 
+                (PartyName, PartyType, DesignationID, ContactNumber, Address, GSTNumber)
+                VALUES (@name, @type, @desigId, @contact, @address, @gst)
+            `);
+            
+        res.status(201).json({ message: 'Party created successfully!' });
+    } catch (err) {
+        console.error('Error creating party:', err);
+        res.status(500).json({ error: 'Failed to create party.' });
+    }
+});
+
+// 3. POST: Update an existing Party (EDIT via POST Tunneling)
 app.post('/api/parties/edit/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { partyName, partyType, designationId, contactNumber, address, gstNumber } = req.body;
+        const { partyName, partyType, designationId, phone, address, gstNumber } = req.body;
         
         if (!partyName || !partyType) {
             return res.status(400).json({ error: 'Party Name and Type are required' });
@@ -766,10 +779,10 @@ app.post('/api/parties/edit/:id', async (req, res) => {
             .input('id', sql.Int, id)
             .input('name', sql.VarChar, partyName)
             .input('type', sql.VarChar, partyType)
-            .input('desigId', sql.Int, partyType === 'Employee' ? designationId : null)
-            .input('contact', sql.VarChar, partyType !== 'Employee' ? contactNumber : null)
-            .input('address', sql.Text, partyType !== 'Employee' ? address : null)
-            .input('gst', sql.VarChar, partyType !== 'Employee' ? gstNumber : null)
+            .input('desigId', sql.Int, partyType === 'Employee' && designationId ? designationId : null)
+            .input('contact', sql.VarChar, partyType !== 'Employee' ? (phone || '') : '')
+            .input('address', sql.VarChar, partyType !== 'Employee' ? (address || '') : '')
+            .input('gst', sql.VarChar, partyType !== 'Employee' ? (gstNumber || '') : '')
             .query(`
                 UPDATE mridul.PartyMaster 
                 SET PartyName = @name, 
@@ -792,11 +805,10 @@ app.post('/api/parties/edit/:id', async (req, res) => {
     }
 });
 
-// 4. DELETE: Remove a Party
+// 4. POST: Remove a Party (DELETE via POST Tunneling)
 app.post('/api/parties/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
-
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
             .input('id', sql.Int, id)
@@ -809,11 +821,9 @@ app.post('/api/parties/delete/:id', async (req, res) => {
         res.status(200).json({ message: 'Party deleted successfully!' });
     } catch (err) { 
         console.error('Error deleting party:', err);
-        // Foreign Key Protection: Will fail if the customer/vendor has active orders
         res.status(500).json({ error: 'Failed to delete party. They are likely tied to existing orders or ledger entries.' }); 
     }
 });
-
 // ==========================================
 // PURCHASE ORDER ROUTES
 // ==========================================
@@ -1037,25 +1047,59 @@ app.post('/api/purchase-receiving', async (req, res) => {
 // PRODUCTION ORDER ROUTES
 // ==========================================
 
-// 1. POST: Generate a new Production Order
+// 1. GET: Fetch all Production Orders with Product Details & IDs
+app.get('/api/production-orders', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT 
+                po.ProductionOrderID, 
+                po.OrderDate, 
+                po.SalesOrderRef, 
+                po.TargetQuantity, 
+                po.Status,
+                p.ProductName,
+                p.ClosingBalance
+            FROM mridul.ProductionOrder po
+            INNER JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
+            ORDER BY po.OrderDate DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('Error fetching Production Orders:', err);
+        res.status(500).json({ error: 'Failed to fetch Production Orders' });
+    }
+});
+
+// 2. POST: Generate a new Production Order
 app.post('/api/production-orders', async (req, res) => {
     try {
-        const { productId, salesOrderRef, targetQuantity } = req.body;
+        // Supporting both single item object or items array structure from frontend forms
+        const { productId, salesOrderRef, targetQuantity, items } = req.body;
 
-        // Enhanced Validation
-        if (!productId || !targetQuantity || targetQuantity <= 0) {
+        let targetProdId = productId;
+        let targetQty = targetQuantity;
+        let salesRef = salesOrderRef || null;
+
+        // Fallback if payload comes as an array of items from dynamic row forms
+        if (items && Array.isArray(items) && items.length > 0) {
+            targetProdId = items[0].productId;
+            targetQty = items[0].quantity || items[0].targetQuantity;
+        }
+
+        if (!targetProdId || !targetQty || targetQty <= 0) {
             return res.status(400).json({ error: 'Valid Product and a positive Target Quantity are required' });
         }
 
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
-            .input('productId', sql.Int, productId)
-            .input('salesOrderRef', sql.VarChar, salesOrderRef || null)
-            .input('targetQty', sql.Int, targetQuantity)
+            .input('productId', sql.Int, targetProdId)
+            .input('salesOrderRef', sql.VarChar, salesRef)
+            .input('targetQty', sql.Int, targetQty)
             .query(`
-                INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity, Status)
+                INSERT INTO mridul.ProductionOrder (ProductID, SalesOrderRef, TargetQuantity, Status, OrderDate)
                 OUTPUT INSERTED.ProductionOrderID
-                VALUES (@productId, @salesOrderRef, @targetQty, 'Pending')
+                VALUES (@productId, @salesOrderRef, @targetQty, 'Pending', GETDATE())
             `);
 
         const newId = result.recordset[0].ProductionOrderID;
@@ -1070,40 +1114,12 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// 2. GET: Fetch all Production Orders with Product Details
-app.get('/api/production-orders', async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        
-        // Excellent JOIN logic to pull in Product Name and current Inventory Balance
-        const result = await pool.request().query(`
-            SELECT 
-                po.ProductionOrderID, 
-                po.OrderDate, 
-                po.SalesOrderRef, 
-                po.TargetQuantity, 
-                po.Status,
-                p.ProductName,
-                p.ClosingBalance
-            FROM mridul.ProductionOrder po
-            INNER JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-            ORDER BY po.OrderDate DESC
-        `);
-        
-        res.status(200).json(result.recordset);
-    } catch (err) {
-        console.error('Error fetching Production Orders:', err);
-        res.status(500).json({ error: 'Failed to fetch Production Orders' });
-    }
-});
-
-// 3. DELETE: Cancel a pending Production Order (Safe Delete)
+// 3. POST: Cancel/Delete a pending Production Order (Safe Delete via POST Tunneling)
 app.post('/api/production-orders/delete/:id', async (req, res) => {
     try {
         const { id } = req.params;
         const pool = await sql.connect(dbConfig);
         
-        // We add "AND Status = 'Pending'" to ensure we never delete an active/completed order
         const result = await pool.request()
             .input('poId', sql.Int, id)
             .query(`
@@ -1121,7 +1137,6 @@ app.post('/api/production-orders/delete/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to cancel Production Order' });
     }
 });
-
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES
 // ==========================================
