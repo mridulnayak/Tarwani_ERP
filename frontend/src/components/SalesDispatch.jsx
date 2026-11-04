@@ -227,14 +227,33 @@ const handleSalesOrderChange = async (soId) => {
                   <th className="px-6 py-4 font-semibold">Vehicle No</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+<tbody className="divide-y divide-gray-200">
                 {filteredDispatches.map((d, idx) => (
                   <tr key={idx} className="hover:bg-gray-50 bg-white">
-                    <td className="px-6 py-4 font-bold text-blue-600">{d.DispatchNo || `DSP-${idx+1}`}</td>
-                    <td className="px-6 py-4 text-gray-500">{new Date(d.DispatchDate || Date.now()).toLocaleDateString()}</td>
-                    <td className="px-6 py-4 font-bold text-gray-900">{d.CustomerName || 'N/A'}</td>
-                    <td className="px-6 py-4">{d.ReceivedByName || 'N/A'}</td>
-                    <td className="px-6 py-4 font-mono">{d.VehicleNo || 'N/A'}</td>
+                    {/* Fallback to DispatchID if DispatchNo isn't available from backend */}
+                    <td className="px-6 py-4 font-bold text-blue-600">
+                      {d.DispatchNo || d.DispatchID ? `DSP-${d.DispatchID}` : `DSP-00${idx+1}`}
+                    </td>
+                    
+                    {/* Ensure Date renders safely */}
+                    <td className="px-6 py-4 text-gray-500">
+                      {new Date(d.DispatchDate || Date.now()).toLocaleDateString()}
+                    </td>
+                    
+                    {/* Fallback to SONumber if CustomerName isn't returned by the join */}
+                    <td className="px-6 py-4 font-bold text-gray-900">
+                        {d.CustomerName || d.SONumber || 'N/A'}
+                    </td>
+                    
+                    {/* Match the exact key returned by the backend (DispatchedBy) */}
+                    <td className="px-6 py-4">
+                        {d.ReceivedByName || d.DispatchedBy || 'System'}
+                    </td>
+                    
+                    {/* Match the exact key returned by the backend (VehicleNumber) */}
+                    <td className="px-6 py-4 font-mono">
+                        {d.VehicleNo || d.VehicleNumber || 'N/A'}
+                    </td>
                   </tr>
                 ))}
                 {filteredDispatches.length === 0 && (
