@@ -1645,11 +1645,13 @@ app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
             .input('soId', sql.Int, soId)
             .query(`
                 SELECT 
+                    -- Update this if your column is named ItemID instead of ProductID
                     d.ProductID, 
                     ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
                     ISNULL(d.Quantity, 0) AS Quantity,
                     ISNULL(d.Rate, 0) AS Rate
-                FROM mridul.SalesOrderDetail d
+                -- REPLACE 'SalesOrderDetail' WITH YOUR ACTUAL TABLE NAME
+                FROM mridul.YOUR_ACTUAL_TABLE_NAME d
                 LEFT JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
                 WHERE d.SO_ID = @soId
             `);
@@ -1657,7 +1659,6 @@ app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
         return res.status(200).json(result.recordset || []);
     } catch (err) {
         console.error('🔥 SQL CRASH IN V2 ROUTE:', err.message);
-        // 🚨 YAHAN SE EXACT ERROR FRONTEND PAR JAYEGA 🚨
         return res.status(500).json({ error: `Database Crash: ${err.message}` });
     }
 });
