@@ -1631,8 +1631,10 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// BULLETPROOF SALES DISPATCH  ROUTE
+// SALES DISPATCH & OUTBOUND ROUTES
 // ==========================================
+
+// 1. GET: Fetch Dispatch History (Month-wise) with Plural Support
 app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         const { month, year } = req.query;
@@ -1665,18 +1667,20 @@ app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     }
 });
 
+// 2. POST: The Ultimate Defensive Sales Dispatch Route
 app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
-    try {
-        console.log("=== INCOMING SALES DISPATCH PAYLOAD ===", JSON.stringify(req.body));
+    let transaction; // Declare outside for safe rollback
 
-        // Strict integer parsing to prevent SQL type errors
+    try {
+        console.log("=== INCOMING SALES DISPATCH PAYLOAD ===", JSON.stringify(req.body, null, 2));
+
         const soId = parseInt(req.body.soId || req.body.SO_ID || req.body.salesOrderId, 10);
-        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle || '';
+        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle || 'N/A';
         const dispatchedBy = req.body.dispatchedBy || req.body.userName || req.body.loggedBy || 'System';
         const rawItems = req.body.items || req.body.dispatchItems;
 
         if (!soId || isNaN(soId)) {
-            return res.status(400).json({ error: 'Valid Sales Order ID is required.' });
+            return res.status(400).json({ error: `Valid Sales Order ID is required. Received: ${req.body.soId}` });
         }
         if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
             return res.status(400).json({ error: 'Dispatch items array is missing or empty.' });
@@ -1684,7 +1688,7 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
-        // Ensure SalesDispatch table exists
+        // Ensure SalesDispatch table exists safely
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[SalesDispatch]'))
             BEGIN
@@ -1700,72 +1704,74 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
             END
         `);
 
-        const transaction = new sql.Transaction(pool);
+        transaction = new sql.Transaction(pool);
         await transaction.begin();
 
-        try {
-            for (const rawItem of rawItems) {
-                // Strict type conversion for SQL inputs
-                const productId = parseInt(rawItem.productId || rawItem.ProductID || rawItem.itemId, 10);
-                const quantity = parseInt(rawItem.quantity || rawItem.qty || rawItem.DispatchedQty, 10);
+        for (const rawItem of rawItems) {
+            const productId = parseInt(rawItem.productId || rawItem.ProductID || rawItem.itemId, 10);
+            const quantity = parseInt(rawItem.quantity || rawItem.qty || rawItem.DispatchedQty, 10);
 
-                if (!productId || isNaN(productId) || !quantity || isNaN(quantity)) {
-                    throw new Error(`Invalid item structure: Product ID and Quantity must be valid numbers.`);
-                }
-
-                // A. Log the dispatch record
-                await new sql.Request(transaction)
-                    .input('soId', sql.Int, soId)
-                    .input('productId', sql.Int, productId)
-                    .input('qty', sql.Int, quantity)
-                    .input('vehicle', sql.VarChar, vehicleNumber)
-                    .input('dispatchedBy', sql.VarChar, dispatchedBy)
-                    .query(`
-                        INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
-                        VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
-                    `);
-
-                // B. Deduct Stock safely
-                const stockResult = await new sql.Request(transaction)
-                    .input('productId', sql.Int, productId)
-                    .input('qty', sql.Int, quantity)
-                    .query(`
-                        UPDATE mridul.ProductMaster 
-                        SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
-                        OUTPUT INSERTED.ClosingBalance
-                        WHERE ProductID = @productId
-                    `);
-
-                if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
-                    throw new Error(`Insufficient stock for Product ID: ${productId}`);
-                }
+            if (!productId || isNaN(productId) || !quantity || isNaN(quantity)) {
+                await transaction.rollback();
+                return res.status(400).json({ 
+                    error: `Invalid Item Data. ProductID or Quantity is not a number. Received ProductID: ${rawItem.productId}, Qty: ${rawItem.quantity}` 
+                });
             }
 
-            // C. Mark Sales Order as Dispatched
+            // A. Log the dispatch
             await new sql.Request(transaction)
                 .input('soId', sql.Int, soId)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
+                .input('vehicle', sql.VarChar, vehicleNumber)
+                .input('dispatchedBy', sql.VarChar, dispatchedBy)
                 .query(`
-                    UPDATE mridul.SalesOrderHeader 
-                    SET Status = 'Dispatched' 
-                    WHERE SO_ID = @soId
+                    INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
+                    VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
                 `);
 
-            await transaction.commit(); 
-            return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
+            // B. Deduct Stock safely
+            const stockResult = await new sql.Request(transaction)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
+                .query(`
+                    UPDATE mridul.ProductMaster 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
+                    OUTPUT INSERTED.ClosingBalance
+                    WHERE ProductID = @productId
+                `);
 
-        } catch (txErr) {
-            // Isolate transaction rollback from general server errors
-            await transaction.rollback();
-            throw txErr; 
+            if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
+                await transaction.rollback();
+                return res.status(400).json({ error: `Insufficient stock for Product ID: ${productId}. Cannot dispatch.` });
+            }
         }
 
+        // C. Update Sales Order Status
+        await new sql.Request(transaction)
+            .input('soId', sql.Int, soId)
+            .query(`
+                UPDATE mridul.SalesOrderHeader 
+                SET Status = 'Dispatched' 
+                WHERE SO_ID = @soId
+            `);
+
+        await transaction.commit(); 
+        return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
+
     } catch (err) {
-        console.error('🔥 DISPATCH 500 CRASH TRACE:', err);
-        // This will now send the exact SQL complaint back to your network tab/frontend alert
-        return res.status(500).json({ error: err.message || 'Internal Server Error during dispatch.' });
+        console.error('🔥 SQL CRASH TRACE:', err);
+        
+        if (transaction) {
+            try { await transaction.rollback(); } catch (rollbackErr) { /* ignore */ }
+        }
+
+        return res.status(500).json({ 
+            error: `Database Crash: ${err.message}`, 
+            hint: "Check your console for the full stack trace." 
+        });
     }
 });
-
 
 // --- SERVE STATIC FRONTEND ASSETS ---
 const frontendDistPath = path.join(__dirname, '../frontend/dist');

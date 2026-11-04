@@ -54,7 +54,7 @@ export default function App() {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // --- ALIGNED WITH UNCLE's BUSINESS LOGIC ---
+
   const menuCategories = [
     {
       title: 'Overview',
