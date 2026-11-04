@@ -1120,7 +1120,7 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// 3. GET: Load single order details (Bulletproof with fallback)
+// 3. GET: Bulletproof Order Details Fetch for ANY Order ID
 app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req, res) => {
     try {
         const rawId = req.params.id;
@@ -1149,23 +1149,7 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
             `);
 
         if (orderResult.recordset.length === 0) {
-            orderResult = await pool.request().query(`
-                SELECT TOP 1
-                    po.ProductionOrderID AS OrderID,
-                    'PRD-' + CAST(po.ProductionOrderID AS VARCHAR) AS OrderNo,
-                    ISNULL(po.Status, 'Pending') AS Status,
-                    ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
-                    po.ProductID,
-                    ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
-                    ISNULL(po.TargetQuantity, 0) AS QtyRequired
-                FROM mridul.ProductionOrder po
-                LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-                ORDER BY po.ProductionOrderID DESC
-            `);
-        }
-
-        if (orderResult.recordset.length === 0) {
-            return res.status(404).json({ error: "Order not found." });
+            return res.status(404).json({ error: "Order not found or completed." });
         }
 
         const orderData = orderResult.recordset[0];
@@ -1200,7 +1184,7 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
     }
 });
 
-// 4. GET: Fetch Recent Batches
+// 4. GET: Fetch Recent Batches (Fixed Table & Column mapping)
 app.get('/api/production/batches', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -1221,13 +1205,14 @@ app.get('/api/production/batches', async (req, res) => {
 
         const result = await pool.request().query(`
             SELECT TOP 50 
-                pb.BatchNo, 
-                pb.ProductionDate, 
-                'PRD-' + CAST(pb.OrderID AS VARCHAR) AS OrderNo,
-                pb.QtyProduced
+                ISNULL(pb.BatchNo, 'BTH-GEN') AS BatchNo, 
+                ISNULL(pb.ProductionDate, GETDATE()) AS ProductionDate, 
+                'PRD-' + CAST(ISNULL(pb.OrderID, 0) AS VARCHAR) AS OrderNo,
+                ISNULL(pb.QtyProduced, 0) AS QtyProduced
             FROM mridul.ProductionBatch pb
-            ORDER BY pb.ProductionDate DESC
+            ORDER BY pb.ProductionDate DESC, pb.BatchID DESC
         `);
+        
         res.status(200).json(result.recordset);
     } catch (err) {
         console.error('SQL Error in GET /api/production/batches:', err.message);
