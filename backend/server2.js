@@ -1631,8 +1631,40 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// BULLETPROOF SALES DISPATCH POST ROUTE
+// BULLETPROOF SALES DISPATCH  ROUTE
 // ==========================================
+app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
+    try {
+        const { month, year } = req.query;
+
+        if (!month || !year) {
+            return res.status(200).json([]);
+        }
+
+        const pool = await sql.connect(dbConfig);
+        const request = pool.request();
+        
+        const result = await request
+            .input('month', sql.Int, month)
+            .input('year', sql.Int, year)
+            .query(`
+                SELECT 
+                    d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
+                    so.SONumber, p.ProductName
+                FROM mridul.SalesDispatch d
+                INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
+                INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+                WHERE MONTH(d.DispatchDate) = @month AND YEAR(d.DispatchDate) = @year
+                ORDER BY d.DispatchDate DESC
+            `);
+            
+        return res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('Error fetching dispatches:', err);
+        return res.status(500).json({ error: err.message || 'Failed to fetch dispatch records' });
+    }
+});
+
 app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         console.log("=== INCOMING SALES DISPATCH PAYLOAD ===", JSON.stringify(req.body));
