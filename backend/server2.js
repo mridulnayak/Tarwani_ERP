@@ -1120,32 +1120,15 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// 3. GET: Load single order details (Fixes the 404 Error)
+// 1. GET: Load single order details (BULLETPROOF - Will not crash even if Batch table is broken)
 app.get('/api/production/order/:id', async (req, res) => {
     try {
         const orderId = parseInt(req.params.id.toString().replace(/\D/g, ''), 10);
         if (isNaN(orderId)) return res.status(400).json({ error: "Invalid Order ID." });
 
         const pool = await sql.connect(dbConfig);
-        
-        try {
-            await pool.request().query(`
-                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
-                BEGIN
-                    CREATE TABLE mridul.ProductionBatch (
-                        BatchID INT IDENTITY(1,1) PRIMARY KEY,
-                        BatchNo VARCHAR(50),
-                        OrderID INT,
-                        ProductID INT,
-                        QtyProduced FLOAT,
-                        ProductionDate DATETIME DEFAULT GETDATE()
-                    )
-                END
-            `);
-        } catch (tableErr) {
-            console.error('ProductionBatch Table Creation Warning:', tableErr.message);
-        }
 
+        // Step A: Fetch the Main Order Details (This will always work)
         const orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
             .query(`
@@ -1156,18 +1139,26 @@ app.get('/api/production/order/:id', async (req, res) => {
                     po.TargetQuantity,
                     po.ProductID,
                     ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
-                    po.TargetQuantity AS QtyRequired,
-                    ISNULL((
-                        SELECT SUM(QtyProduced) 
-                        FROM mridul.ProductionBatch pb 
-                        WHERE pb.OrderID = @orderId
-                    ), 0) AS QtyCompleted
+                    po.TargetQuantity AS QtyRequired
                 FROM mridul.ProductionOrder po
                 LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
                 WHERE po.ProductionOrderID = @orderId
             `);
 
-        if (orderResult.recordset.length === 0) return res.status(404).json({ error: "Order not found." });
+        if (orderResult.recordset.length === 0) {
+            return res.status(404).json({ error: "Order not found." });
+        }
+
+        // Step B: Safely calculate completed quantity (ISOLATED - Won't crash the app if table is missing)
+        let qtyCompleted = 0;
+        try {
+            const batchResult = await pool.request()
+                .input('orderId', sql.Int, orderId)
+                .query(`SELECT ISNULL(SUM(QtyProduced), 0) AS TotalCompleted FROM mridul.ProductionBatch WHERE OrderID = @orderId`);
+            qtyCompleted = batchResult.recordset[0].TotalCompleted;
+        } catch (batchErr) {
+            console.log("Batch table SQL check failed (Safe Ignore - Defaulting to 0):", batchErr.message);
+        }
 
         const orderData = orderResult.recordset[0];
         res.status(200).json({
@@ -1177,15 +1168,14 @@ app.get('/api/production/order/:id', async (req, res) => {
                 ProductID: orderData.ProductID,
                 ProductName: orderData.ProductName,
                 QtyRequired: orderData.QtyRequired,
-                QtyCompleted: orderData.QtyCompleted || 0
+                QtyCompleted: qtyCompleted
             }]
         });
     } catch (err) {
-        console.error('Error fetching order /api/production/order/:id:', err.message);
+        console.error('API Error /api/production/order/:id:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
-
 // 4. GET: Fetch Recent Batches
 app.get('/api/production/batches', async (req, res) => {
     try {
