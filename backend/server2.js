@@ -1631,39 +1631,35 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// SALES DISPATCH & OUTBOUND ROUTES
+// SALES ORDER ITEMS (FOR DISPATCH DROPDOWN)
 // ==========================================
-
-// 1. GET: Fetch Dispatch History (Month-wise) with Plural Support
-app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
+app.get('/api/sales-orders/:id/items', async (req, res) => {
     try {
-        const { month, year } = req.query;
-
-        if (!month || !year) {
-            return res.status(200).json([]);
+        const soId = parseInt(req.params.id, 10);
+        if (isNaN(soId)) {
+            return res.status(400).json({ error: "Invalid Sales Order ID format" });
         }
 
         const pool = await sql.connect(dbConfig);
-        const request = pool.request();
         
-        const result = await request
-            .input('month', sql.Int, month)
-            .input('year', sql.Int, year)
+        // Fetch items and JOIN with ProductMaster to get the exact Product Name and ID
+        const result = await pool.request()
+            .input('soId', sql.Int, soId)
             .query(`
                 SELECT 
-                    d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
-                    so.SONumber, p.ProductName
-                FROM mridul.SalesDispatch d
-                INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
-                INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
-                WHERE MONTH(d.DispatchDate) = @month AND YEAR(d.DispatchDate) = @year
-                ORDER BY d.DispatchDate DESC
+                    d.ProductID,
+                    ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
+                    ISNULL(d.Quantity, 0) AS Quantity
+                FROM mridul.SalesOrderDetail d
+                LEFT JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+                WHERE d.SO_ID = @soId
             `);
-            
-        return res.status(200).json(result.recordset);
+
+        // If no items found, return empty array safely
+        return res.status(200).json(result.recordset || []);
     } catch (err) {
-        console.error('Error fetching dispatches:', err);
-        return res.status(500).json({ error: err.message || 'Failed to fetch dispatch records' });
+        console.error('Error fetching SO items for dispatch:', err.message);
+        return res.status(500).json({ error: 'Failed to fetch order items' });
     }
 });
 

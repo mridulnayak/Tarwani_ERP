@@ -53,8 +53,7 @@ export default function SalesDispatch({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-  // When a Sales Order is selected, fetch its pending items
-  const handleSalesOrderChange = async (soId) => {
+const handleSalesOrderChange = async (soId) => {
     setSelectedSoId(soId);
     setDispatchItems([]);
     if (!soId) {
@@ -67,14 +66,16 @@ export default function SalesDispatch({ user }) {
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/items`, {
         headers: { 'x-access-token': token }
       });
+      
       const data = res.ok ? await res.json() : [];
+      console.log("🔥 FETCHED SO ITEMS FROM API:", data); // Check F12 Console with this
+      
       setSoItemsList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SO items:", err);
       setSoItemsList([]);
     }
   };
-
   const soOptions = salesOrders.map(so => ({
     value: String(so.SO_ID || so.SalesOrderID),
     label: `${so.SONumber} - ${so.CustomerName || 'Customer'}`
@@ -109,7 +110,7 @@ export default function SalesDispatch({ user }) {
     setDispatchItems([...dispatchItems, { ...currentProduct }]);
     setCurrentProduct({ productId: '', quantity: 1 });
   };
-  
+
   const handleRemoveDispatchItem = (index) => {
     setDispatchItems(dispatchItems.filter((_, i) => i !== index));
   };
