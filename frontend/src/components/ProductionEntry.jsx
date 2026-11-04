@@ -1,49 +1,82 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Select from 'react-select';
 
 export default function ProductionEntry({ user }) {
-  const [searchOrderNo, setSearchOrderNo] = useState('');
+  const [productionOrders, setProductionOrders] = useState([]);
+  const [recentBatches, setRecentBatches] = useState([]);
+  
+  // View Toggle: 'list' or 'create'
+  const [viewMode, setViewMode] = useState('list');
+
+  // Form State
+  const [selectedOrderId, setSelectedOrderId] = useState('');
   const [activeOrder, setActiveOrder] = useState(null);
   const [pendingItems, setPendingItems] = useState([]);
-  
-  // Tracks the quantities the user is entering today: { ItemID: quantity }
   const [productionInputs, setProductionInputs] = useState({});
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const loadOrder = async (e) => {
-    e.preventDefault();
-    if (!searchOrderNo.trim()) return alert("Enter a Production Order Number");
+  const fetchData = async () => {
+    try {
+      const token = localStorage.getItem('erp_token');
+      
+      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+        headers: { 'x-access-token': token }
+      });
+      const poData = poRes.ok ? await poRes.json() : [];
+      setProductionOrders(Array.isArray(poData) ? poData : []);
+
+      const batchRes = await fetch('https://sms.uvtechsolutions.co.in/api/production/batches', {
+        headers: { 'x-access-token': token }
+      }).catch(() => ({ ok: false })); 
+      const batchData = batchRes.ok ? await batchRes.json() : [];
+      setRecentBatches(Array.isArray(batchData) ? batchData : []);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  const orderOptions = productionOrders
+    .filter(po => po.Status !== 'Completed')
+    .map(po => ({
+      value: String(po.ProductionOrderID || po.OrderID),
+      label: `${po.OrderNo} - ${po.ProductName} (Target: ${po.TargetQuantity})`
+    }));
+
+  const handleOrderSelect = async (orderId) => {
+    setSelectedOrderId(orderId);
+    if (!orderId) {
+      setActiveOrder(null);
+      setPendingItems([]);
+      return;
+    }
 
     try {
       const token = localStorage.getItem('erp_token');
-      // Using POST Tunneling for safe retrieval through IIS if GET is heavily filtered, 
-      // but standard GET is usually fine. We will use GET here.
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/order/${searchOrderNo}`, {
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/order/${orderId}`, {
         headers: { 'x-access-token': token }
       });
       
-      if (!res.ok) throw new Error("Order not found or already fully completed.");
+      if (!res.ok) throw new Error("Order not found or completed.");
       
       const data = await res.json();
       setActiveOrder(data.order);
       setPendingItems(data.items);
-      setProductionInputs({}); // Reset inputs on new load
+      setProductionInputs({});
     } catch (error) {
       console.error(error);
-      alert("Could not load Order. Check the Order No or ensure it has pending items.");
+      alert("Could not load pending items for this order.");
       setActiveOrder(null);
       setPendingItems([]);
     }
   };
 
   const handleQtyChange = (itemId, value) => {
-    setProductionInputs(prev => ({
-      ...prev,
-      [itemId]: value
-    }));
+    setProductionInputs(prev => ({ ...prev, [itemId]: value }));
   };
 
   const handleGenerateBatch = async () => {
-    // Filter out empty or zero inputs
     const batchItems = pendingItems.map(item => ({
       ItemID: item.ItemID,
       ProductID: item.ProductID,
@@ -51,39 +84,29 @@ export default function ProductionEntry({ user }) {
       RemainingQty: item.QtyRequired - item.QtyCompleted
     })).filter(item => item.QtyProduced > 0);
 
-    if (batchItems.length === 0) {
-      return alert("Enter at least one produced quantity to generate a batch.");
-    }
+    if (batchItems.length === 0) return alert("Enter at least one produced quantity to generate a batch.");
 
-    // Validation: Ensure they don't produce more than required
     for (const item of batchItems) {
       if (item.QtyProduced > item.RemainingQty) {
         return alert(`Cannot produce more than the remaining required quantity for Product #${item.ProductID}`);
       }
     }
 
-    if (!window.confirm("Generate a new Production Batch for these items?")) return;
+    if (!window.confirm("Generate a new Production Batch?")) return;
     setIsProcessing(true);
 
     try {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/batch/create`, {
-        method: 'POST', // Native POST, IIS allows this
-        headers: { 
-          'Content-Type': 'application/json',
-          'x-access-token': token 
-        },
-        body: JSON.stringify({
-          OrderID: activeOrder.OrderID,
-          items: batchItems
-        })
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-access-token': token },
+        body: JSON.stringify({ OrderID: activeOrder.OrderID, items: batchItems })
       });
 
       if (res.ok) {
-        const data = await res.json();
-        alert(`Batch Generated Successfully! Batch No: ${data.batchNo}`);
-        // Reload the order to refresh the remaining quantities
-        loadOrder({ preventDefault: () => {} }); 
+        alert("Batch Generated Successfully!");
+        handleOrderSelect(selectedOrderId);
+        fetchData();
       } else {
         alert("Failed to generate batch.");
       }
@@ -95,95 +118,146 @@ export default function ProductionEntry({ user }) {
   };
 
   return (
-    <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* ENTERPRISE TOOLBAR */}
-      <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
-        <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
-          Production Batch Entry
-        </h2>
-        
-        <form onSubmit={loadOrder} className="flex w-full md:w-auto gap-3">
-          <input
-            type="text"
-            placeholder="Enter Order No (e.g. PRD-001)..."
-            value={searchOrderNo}
-            onChange={(e) => setSearchOrderNo(e.target.value)}
-            className="w-full md:w-64 p-2 bg-white border border-gray-400 text-gray-900 rounded focus:ring-2 focus:ring-blue-500 font-mono uppercase shadow-sm"
-          />
+      <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div>
+          <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Production Entry</h2>
+          <p className="text-sm text-gray-500 mt-1">Log daily factory production outputs against master orders.</p>
+        </div>
+        <div className="flex items-center gap-2 w-full md:w-auto">
           <button
-            type="submit"
-            className="whitespace-nowrap px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded shadow-sm transition-colors"
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
           >
-            Load List
+            📋 Recent Batches
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => setViewMode('create')}
+            className={`flex-1 md:flex-none px-4 py-2 text-xs font-bold rounded-lg transition-colors shadow-sm ${
+              viewMode === 'create' ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+            }`}
+          >
+            ＋ Enter New Batch
+          </button>
+        </div>
       </div>
 
-      {activeOrder && (
-        <>
-          <div className="p-4 bg-blue-50 border-b border-blue-200 flex justify-between items-center">
-            <div>
-              <p className="text-xs font-bold text-gray-500 uppercase">Active Master Order</p>
-              <p className="text-lg font-mono font-bold text-blue-900">{activeOrder.OrderNo}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs font-bold text-gray-500 uppercase">Order Status</p>
-              <p className="text-sm font-bold text-gray-800">{activeOrder.Status}</p>
-            </div>
+      {viewMode === 'list' && (
+        <div>
+          <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+            <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Recently Logged Batches</h3>
           </div>
-
-          {/* DENSE TABULAR DATA DISPLAY */}
           <div className="w-full overflow-x-auto">
-            <table className="w-full text-left text-sm text-gray-800 min-w-[800px]">
-              <thead className="text-xs uppercase bg-slate-700 text-white">
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b">
                 <tr>
-                  <th className="px-4 py-3 font-bold border-r border-slate-600">Product Name</th>
-                  <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right">Req. Qty</th>
-                  <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right text-green-400">Completed</th>
-                  <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right text-red-300">Pending</th>
-                  <th className="px-4 py-3 font-bold w-48 text-center bg-blue-800">Today's Production</th>
+                  <th className="px-6 py-4 font-semibold">Batch No</th>
+                  <th className="px-6 py-4 font-semibold">Date</th>
+                  <th className="px-6 py-4 font-semibold">Order Ref</th>
+                  <th className="px-6 py-4 font-semibold text-right">Qty Produced</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-300">
-                {pendingItems.map((item) => {
-                  const pending = item.QtyRequired - item.QtyCompleted;
-                  return (
-                    <tr key={item.ItemID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
-                      <td className="px-4 py-2 font-bold text-gray-900 border-r border-gray-200">{item.ProductName}</td>
-                      <td className="px-4 py-2 font-mono text-right border-r border-gray-200">{item.QtyRequired}</td>
-                      <td className="px-4 py-2 font-mono text-right text-green-700 font-bold border-r border-gray-200">{item.QtyCompleted}</td>
-                      <td className="px-4 py-2 font-mono text-right text-red-600 font-bold border-r border-gray-200">{pending}</td>
-                      <td className="px-2 py-1 text-center bg-blue-50">
-                        <input
-                          type="number"
-                          min="0"
-                          max={pending}
-                          step="0.01"
-                          value={productionInputs[item.ItemID] || ''}
-                          onChange={(e) => handleQtyChange(item.ItemID, e.target.value)}
-                          placeholder="0.00"
-                          className="w-full p-1.5 text-right font-mono font-bold border border-gray-400 rounded focus:ring-2 focus:ring-blue-500"
-                        />
-                      </td>
-                    </tr>
-                  );
-                })}
+              <tbody className="divide-y divide-gray-200">
+                {recentBatches.map((batch, idx) => (
+                  <tr key={idx} className="hover:bg-gray-50 bg-white">
+                    <td className="px-6 py-4 font-bold text-blue-600">{batch.BatchNo || `BTH-${idx+1}`}</td>
+                    <td className="px-6 py-4 text-gray-500">{new Date(batch.ProductionDate || Date.now()).toLocaleDateString()}</td>
+                    <td className="px-6 py-4 font-mono">{batch.OrderNo || 'N/A'}</td>
+                    <td className="px-6 py-4 font-bold text-right text-green-600">{batch.QtyProduced} Units</td>
+                  </tr>
+                ))}
+                {recentBatches.length === 0 && (
+                  <tr><td colSpan="4" className="px-6 py-8 text-center text-gray-500">No recent batches found.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
 
-          <div className="p-4 bg-gray-100 border-t border-gray-300 flex justify-end">
-            <button
-              type="button"
-              onClick={handleGenerateBatch}
-              disabled={isProcessing}
-              className={`px-8 py-3 text-white font-bold rounded shadow-md transition-colors ${isProcessing ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700'}`}
-            >
-              {isProcessing ? 'Processing...' : 'Generate New Batch No.'}
-            </button>
+      {viewMode === 'create' && (
+        <div className="p-5 md:p-6">
+          <div className="mb-6">
+            <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Pending Production Order *</label>
+            <Select
+              options={orderOptions}
+              value={orderOptions.find(opt => opt.value === selectedOrderId) || null}
+              onChange={(selected) => handleOrderSelect(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search by Order No or Product..."
+              className="w-full md:w-2/3 text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
           </div>
-        </>
+
+          {activeOrder && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <div className="p-4 bg-blue-50 border-b border-blue-200 flex justify-between items-center">
+                <div>
+                  <p className="text-xs font-bold text-gray-500 uppercase">Active Master Order</p>
+                  <p className="text-lg font-mono font-bold text-blue-900">{activeOrder.OrderNo}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs font-bold text-gray-500 uppercase">Order Status</p>
+                  <p className="text-sm font-bold text-gray-800">{activeOrder.Status}</p>
+                </div>
+              </div>
+
+              <div className="w-full overflow-x-auto bg-white">
+                <table className="w-full text-left text-sm text-gray-800 min-w-[800px]">
+                  <thead className="text-xs uppercase bg-slate-700 text-white">
+                    <tr>
+                      <th className="px-4 py-3 font-bold border-r border-slate-600">Product Name</th>
+                      <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right">Req. Qty</th>
+                      <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right text-green-400">Completed</th>
+                      <th className="px-4 py-3 font-bold border-r border-slate-600 w-32 text-right text-red-300">Pending</th>
+                      <th className="px-4 py-3 font-bold w-48 text-center bg-blue-800">Today's Production</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {pendingItems.map((item) => {
+                      const pending = item.QtyRequired - item.QtyCompleted;
+                      return (
+                        <tr key={item.ItemID} className="hover:bg-yellow-50 transition-colors">
+                          <td className="px-4 py-3 font-bold text-gray-900 border-r border-gray-200">{item.ProductName}</td>
+                          <td className="px-4 py-3 font-mono text-right border-r border-gray-200">{item.QtyRequired}</td>
+                          <td className="px-4 py-3 font-mono text-right text-green-700 font-bold border-r border-gray-200">{item.QtyCompleted}</td>
+                          <td className="px-4 py-3 font-mono text-right text-red-600 font-bold border-r border-gray-200">{pending}</td>
+                          <td className="px-3 py-2 text-center bg-blue-50">
+                            <input
+                              type="number" min="0" max={pending} step="1"
+                              value={productionInputs[item.ItemID] || ''}
+                              onChange={(e) => handleQtyChange(item.ItemID, e.target.value)}
+                              placeholder="0"
+                              className="w-full p-2 text-right font-mono font-bold border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 shadow-inner"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="p-4 bg-gray-50 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleGenerateBatch}
+                  disabled={isProcessing}
+                  className={`px-8 py-3 text-white font-bold rounded-lg shadow transition-colors ${isProcessing ? 'bg-gray-400' : 'bg-blue-600 hover:bg-blue-700'}`}
+                >
+                  {isProcessing ? 'Processing...' : 'Generate New Batch No.'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

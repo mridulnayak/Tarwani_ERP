@@ -1048,79 +1048,58 @@ app.post('/api/purchase-receivings', async (req, res) => {
 });
 
 // ==========================================
-// PRODUCTION ORDER ROUTES (FINAL FIXED)
+// PRODUCTION BATCH ENTRY ROUTES
 // ==========================================
 
-// 1. GET: Fetch all Production Orders
-app.get('/api/production-orders', async (req, res) => {
+// GET: Load single order details for Production Entry
+app.get('/api/production/order/:id', async (req, res) => {
     try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query(`
-            SELECT 
-                po.ProductionOrderID, 
-                'PRD-' + CAST(po.ProductionOrderID AS VARCHAR) AS OrderNo,
-                ISNULL(po.OrderDate, GETDATE()) AS OrderDate, 
-                ISNULL(po.Status, 'Pending') AS Status,
-                ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
-                po.ProductID,
-                ISNULL(p.ProductName, 'Unknown Product') AS ProductName
-            FROM mridul.ProductionOrder po
-            LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-            ORDER BY po.ProductionOrderID DESC
-        `);
-        res.status(200).json(result.recordset);
-    } catch (err) {
-        console.error('SQL Error in GET /api/production-orders:', err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
+        // Automatically extract only the number (handles both "8" and "PRD-8")
+        const orderId = parseInt(req.params.id.toString().replace(/\D/g, ''), 10);
+        
+        if (isNaN(orderId)) return res.status(400).json({ error: "Invalid Order ID." });
 
-// 2. POST: Create Production Order (Without needing OrderNo column in DB)
-app.post('/api/production-orders', async (req, res) => {
-    try {
-        const { productId, targetQuantity, salesOrderRef } = req.body;
-
-        if (!productId || !targetQuantity) {
-            return res.status(400).json({ error: 'Product and Target Quantity are required' });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        await pool.request()
-            .input('productId', sql.Int, productId)
-            .input('targetQty', sql.Int, targetQuantity)
-            .input('salesRef', sql.VarChar, salesOrderRef || null)
-            .query(`
-                INSERT INTO mridul.ProductionOrder (ProductID, TargetQuantity, SalesOrderRef, Status, OrderDate)
-                VALUES (@productId, @targetQty, @salesRef, 'Pending', GETDATE())
-            `);
-
-        res.status(201).json({ message: 'Production Order generated successfully!' });
-    } catch (err) {
-        console.error('SQL Error in POST /api/production-orders:', err.message);
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// 3. POST: Delete/Cancel Production Order (Kept for safety & workflow control)
-app.post('/api/production-orders/delete/:id', async (req, res) => {
-    try {
-        const { id } = req.params;
         const pool = await sql.connect(dbConfig);
         
-        const result = await pool.request()
-            .input('id', sql.Int, id)
+        const orderResult = await pool.request()
+            .input('orderId', sql.Int, orderId)
             .query(`
-                DELETE FROM mridul.ProductionOrder 
-                WHERE ProductionOrderID = @id AND Status = 'Pending'
+                SELECT 
+                    po.ProductionOrderID AS OrderID,
+                    'PRD-' + CAST(po.ProductionOrderID AS VARCHAR) AS OrderNo,
+                    po.Status,
+                    po.TargetQuantity,
+                    po.ProductID,
+                    ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
+                    po.TargetQuantity AS QtyRequired,
+                    ISNULL((SELECT SUM(QtyProduced) FROM mridul.ProductionBatch WHERE OrderID = @orderId), 0) AS QtyCompleted
+                FROM mridul.ProductionOrder po
+                LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
+                WHERE po.ProductionOrderID = @orderId
             `);
-        
-        if (result.rowsAffected[0] === 0) {
-            return res.status(400).json({ error: 'Cannot delete order. It may already be processed or does not exist.' });
+
+        if (orderResult.recordset.length === 0) {
+            return res.status(404).json({ error: "Order not found." });
         }
 
-        res.status(200).json({ message: 'Production Order deleted successfully.' });
+        const orderData = orderResult.recordset[0];
+        
+        res.status(200).json({
+            order: {
+                OrderID: orderData.OrderID,
+                OrderNo: orderData.OrderNo,
+                Status: orderData.Status
+            },
+            items: [{
+                ItemID: orderData.OrderID, 
+                ProductID: orderData.ProductID,
+                ProductName: orderData.ProductName,
+                QtyRequired: orderData.QtyRequired,
+                QtyCompleted: orderData.QtyCompleted
+            }]
+        });
     } catch (err) {
-        console.error('SQL Error in DELETE production order:', err.message);
+        console.error('Error fetching order for production entry:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
