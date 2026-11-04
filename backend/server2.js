@@ -1220,17 +1220,23 @@ app.get('/api/production/batches', async (req, res) => {
     }
 });
 
-// 5. POST: Create New Batch & Update Inventory (Bulletproof)
+// DIAGNOSTIC POST: Create New Batch with Full Error Traceback
 app.post('/api/production/batch/create', async (req, res) => {
-    const { OrderID, items } = req.body;
-    if (!OrderID || !items || items.length === 0) {
-        return res.status(400).json({ error: "Invalid batch data." });
-    }
-
     try {
+        console.log("=== INCOMING BATCH PAYLOAD ===", JSON.stringify(req.body));
+        
+        const { OrderID, items } = req.body;
+        
+        if (!OrderID) {
+            return res.status(400).json({ error: "Missing OrderID in request body." });
+        }
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            return res.status(400).json({ error: "Items array is missing or empty." });
+        }
+
         const pool = await sql.connect(dbConfig);
         
-        // Ensure ProductionBatch table exists with all required columns
+        // Ensure table exists
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
             BEGIN
@@ -1251,6 +1257,7 @@ app.post('/api/production/batch/create', async (req, res) => {
         const batchNo = `BTH-${Date.now()}`;
 
         for (const item of items) {
+            console.l
             await new sql.Request(transaction)
                 .input('batchNo', sql.VarChar, batchNo)
                 .input('orderId', sql.Int, OrderID)
@@ -1263,10 +1270,15 @@ app.post('/api/production/batch/create', async (req, res) => {
         }
 
         await transaction.commit();
-        return res.status(201).json({ message: "Batch Generated", batchNo });
+        return res.status(201).json({ message: "Batch Generated Successfully", batchNo });
     } catch (err) {
-        console.error('Batch Creation Error:', err.message);
-        return res.status(500).json({ error: err.message });
+        console.error('=== CRITICAL BATCH CREATION ERROR ===', err);
+        // Return exact error message to frontend for debugging
+        return res.status(500).json({ 
+            error: err.message, 
+            code: err.code,
+            details: "Check server console for detailed traceback." 
+        });
     }
 });
 
