@@ -60,7 +60,7 @@ export default function ProductionEntry({ user }) {
     .filter(po => po.Status !== 'Completed')
     .map(po => ({
       value: String(po.ProductionOrderID || po.OrderID),
-      label: `${po.OrderNo} - ${po.ProductName} (Target: ${po.TargetQuantity})`
+      label: `PRD-${po.ProductionOrderID || po.OrderID} - ${po.ProductName} (Target: ${po.TargetQuantity})`
     }));
 
   const handleOrderSelect = async (orderId) => {
@@ -74,7 +74,7 @@ export default function ProductionEntry({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/order/${orderId}`, {
-      headers: { 'x-access-token': token }
+        headers: { 'x-access-token': token }
       });
       
       const contentType = res.headers.get("content-type");
@@ -210,19 +210,18 @@ export default function ProductionEntry({ user }) {
         <div className="p-5 md:p-6">
           <div className="mb-6">
             <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Pending Production Order *</label>
-<Select
-  options={orderOptions}
-  value={orderOptions.find(opt => opt.value === selectedOrderId) || null}
-  onChange={(selected) => handleOrderSelect(selected ? selected.value : '')}
-  isSearchable
-  isClearable
-  placeholder="Search by Order No or Product..."
-  className="w-full md:w-2/3 text-gray-900 text-sm"
-  classNamePrefix="erp-select"
-  // Add these two lines to fix the hidden dropdown items:
-  menuPortalTarget={document.body} 
-  styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
-/>
+            <Select
+              options={orderOptions}
+              value={orderOptions.find(opt => opt.value === selectedOrderId) || null}
+              onChange={(selected) => handleOrderSelect(selected ? selected.value : '')}
+              isSearchable
+              isClearable
+              placeholder="Search by Order No or Product..."
+              className="w-full md:w-2/3 text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+              menuPortalTarget={document.body} 
+              styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+            />
           </div>
 
           {activeOrder && (

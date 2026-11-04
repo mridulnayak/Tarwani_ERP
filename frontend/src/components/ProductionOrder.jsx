@@ -10,14 +10,14 @@ export default function ProductionOrder({ user }) {
   // Form State
   const [productId, setProductId] = useState('');
   const [targetQuantity, setTargetQuantity] = useState(1);
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      
+
       // Fetch Products
       const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
         method: 'GET',
@@ -76,7 +76,7 @@ export default function ProductionOrder({ user }) {
           targetQuantity: parseInt(targetQuantity) 
         })
       });
-      
+
       if (res.ok) {
         setProductId('');
         setTargetQuantity(1);
@@ -102,7 +102,7 @@ export default function ProductionOrder({ user }) {
     doc.setFontSize(22);
     doc.setTextColor(41, 128, 185);
     doc.text("TARWANI SOAPS", 105, 20, { align: "center" });
-    
+
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
     doc.text("Factory Production Target Sheet", 105, 28, { align: "center" });
@@ -138,13 +138,13 @@ export default function ProductionOrder({ user }) {
 
   return (
     <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
-      
+
       {/* ENTERPRISE TOOLBAR */}
       <div className="p-4 border-b border-gray-300 bg-gray-100 flex flex-col md:flex-row justify-between items-center gap-4">
         <h2 className="text-xl font-extrabold text-gray-800 uppercase tracking-wider">
           Production Orders Master
         </h2>
-        
+
         <div className="flex w-full md:w-auto gap-3">
           <input
             type="search"
@@ -170,7 +170,7 @@ export default function ProductionOrder({ user }) {
         <div className="p-5 bg-blue-50 border-b border-blue-200">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <h3 className="text-md font-bold text-gray-800 uppercase">New Production Target</h3>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1 md:col-span-2">
                 <label className="text-xs font-bold text-gray-700 uppercase">Product / Finish Good</label>
@@ -183,6 +183,8 @@ export default function ProductionOrder({ user }) {
                   placeholder="Search products..."
                   className="w-full text-gray-900 text-sm"
                   classNamePrefix="erp-select"
+                  menuPortalTarget={document.body}
+                  styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
                 />
               </div>
 

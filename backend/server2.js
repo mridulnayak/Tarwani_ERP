@@ -1049,7 +1049,7 @@ app.post('/api/purchase-receivings', async (req, res) => {
 });
 
 // ==========================================
-// UNIFIED PRODUCTION & FINISHED GOODS ROUTES
+// UNIFIED PRODUCTION & FINISHED GOODS ROUTES (SERVER2.JS)
 // ==========================================
 
 // 1. GET: Fetch all Production Orders
@@ -1076,7 +1076,7 @@ app.get('/api/production-orders', async (req, res) => {
     }
 });
 
-// 2. POST: Create New Production Order (MISSING FROM YOUR SNIPPET - ADDED HERE)
+// 2. POST: Create New Production Order
 app.post('/api/production-orders', async (req, res) => {
     try {
         const { productId, targetQuantity, salesOrderRef } = req.body;
@@ -1086,7 +1086,6 @@ app.post('/api/production-orders', async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
-        // Isolated Table Creation
         try {
             await pool.request().query(`
                 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionOrder]'))
@@ -1121,9 +1120,8 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-
-// BULLETPROOF PRODUCTION ORDER BATCH ROUTES
-app.get('/api/production/order/:id', async (req, res) => {
+// 3. GET: Load single order details (Bulletproof with fallback)
+app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req, res) => {
     try {
         const rawId = req.params.id;
         const orderId = parseInt(rawId.toString().replace(/\D/g, ''), 10);
@@ -1134,7 +1132,6 @@ app.get('/api/production/order/:id', async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
 
-        // 1. Fetch exact order
         let orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
             .query(`
@@ -1151,7 +1148,6 @@ app.get('/api/production/order/:id', async (req, res) => {
                 WHERE po.ProductionOrderID = @orderId
             `);
 
-        // 2. Fallback to latest if specific ID row is missing in this session
         if (orderResult.recordset.length === 0) {
             orderResult = await pool.request().query(`
                 SELECT TOP 1
@@ -1174,7 +1170,6 @@ app.get('/api/production/order/:id', async (req, res) => {
 
         const orderData = orderResult.recordset[0];
 
-        // 3. Safely calculate completed quantity from batches
         let qtyCompleted = 0;
         try {
             const batchResult = await pool.request()
@@ -1182,7 +1177,6 @@ app.get('/api/production/order/:id', async (req, res) => {
                 .query(`SELECT ISNULL(SUM(QtyProduced), 0) AS TotalCompleted FROM mridul.ProductionBatch WHERE OrderID = @orderId`);
             qtyCompleted = batchResult.recordset[0].TotalCompleted;
         } catch (batchErr) {
-            console.log("Batch table check skipped safely:", batchErr.message);
             qtyCompleted = 0;
         }
 
@@ -1205,10 +1199,26 @@ app.get('/api/production/order/:id', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 // 4. GET: Fetch Recent Batches
 app.get('/api/production/batches', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
+        
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
+            BEGIN
+                CREATE TABLE mridul.ProductionBatch (
+                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
+                    BatchNo VARCHAR(50),
+                    OrderID INT,
+                    ProductID INT,
+                    QtyProduced FLOAT,
+                    ProductionDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+
         const result = await pool.request().query(`
             SELECT TOP 50 
                 pb.BatchNo, 
@@ -1258,7 +1268,7 @@ app.post('/api/production/batch/create', async (req, res) => {
     }
 });
 
-// 6. GET: Fetch Recent Finished Goods (Isolated Execution to prevent 500 crash)
+// 6. GET: Fetch Recent Finished Goods
 app.get('/api/finished-goods', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -1328,8 +1338,6 @@ app.post('/api/finished-goods', async (req, res) => {
                 WHERE ProductionOrderID = @poId AND Status != 'Completed'
             `);
 
-        if (poResult.rowsAffected[0] === 0) throw new Error('ALREADY_COMPLETED'); 
-
         await new sql.Request(transaction)
             .input('receiptNo', sql.VarChar, receiptNo)
             .input('poId', sql.Int, productionOrderId)
@@ -1356,7 +1364,7 @@ app.post('/api/finished-goods', async (req, res) => {
     } catch (err) {
         try { await transaction.rollback(); } catch (rollbackErr) {}
         console.error('Finished Goods Transaction Failed:', err.message);
-        res.status(500).json({ error: 'Failed' });
+        res.status(500).json({ error: err.message });
     }
 });
 

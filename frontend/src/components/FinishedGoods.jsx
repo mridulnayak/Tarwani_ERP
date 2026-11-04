@@ -224,6 +224,8 @@ export default function FinishedGoodsReceipt({ user }) {
                 placeholder="Search Pending Orders..."
                 className="text-gray-900 text-sm"
                 classNamePrefix="erp-select"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
             <div>
@@ -237,6 +239,8 @@ export default function FinishedGoodsReceipt({ user }) {
                 placeholder="Employee logging to store..."
                 className="text-gray-900 text-sm"
                 classNamePrefix="erp-select"
+                menuPortalTarget={document.body}
+                styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
           </div>
