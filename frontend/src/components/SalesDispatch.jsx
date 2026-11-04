@@ -85,19 +85,31 @@ export default function SalesDispatch({ user }) {
     label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
   }));
 
-  const productOptions = soItemsList.map(item => ({
-    value: String(item.ProductID),
-    label: `${item.ProductName} (Ordered: ${item.Quantity})`
-  }));
+  // 🚨 REFINED PRODUCT OPTIONS MAPPING 
+  const productOptions = (soItemsList || []).map(item => {
+    // Catch every possible variation of the ID and Name from the API response
+    const pId = item.ProductID || item.productId || item.id || item.ItemID;
+    const pName = item.ProductName || item.productName || item.ItemName || 'Unknown Product';
+    const qty = item.Quantity || item.quantity || item.Qty || 0;
+
+    return {
+      value: String(pId),
+      label: `${pName} (Ordered: ${qty})`
+    };
+  }).filter(opt => opt.value && opt.value !== 'undefined'); // Drop invalid ones automatically
 
   const handleAddDispatchItem = () => {
-    if (!currentProduct.productId) return alert("Please select a product from the order items.");
-    if (currentProduct.quantity <= 0) return alert("Quantity must be greater than zero.");
+    if (!currentProduct.productId || currentProduct.productId === 'undefined') {
+      return alert("Technical Error: The selected product does not have a valid ID.");
+    }
+    if (currentProduct.quantity <= 0) {
+      return alert("Quantity must be greater than zero.");
+    }
 
     setDispatchItems([...dispatchItems, { ...currentProduct }]);
     setCurrentProduct({ productId: '', quantity: 1 });
   };
-
+  
   const handleRemoveDispatchItem = (index) => {
     setDispatchItems(dispatchItems.filter((_, i) => i !== index));
   };
@@ -118,9 +130,9 @@ const handleSubmitDispatch = async (e) => {
         vehicleNumber: vehicleNo,         // Backend expects 'vehicleNumber'
         remarks: remarks, 
         items: dispatchItems.map(item => ({
-            productId: parseInt(item.productId, 10), // Ensure it's a number
-            quantity: parseInt(item.quantity, 10)    // Ensure it's a number
-        })) 
+             productId: parseInt(item.productId, 10), 
+             quantity: parseInt(item.quantity, 10)    
+        }))
       };
 
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
