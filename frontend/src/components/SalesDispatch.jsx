@@ -102,7 +102,7 @@ export default function SalesDispatch({ user }) {
     setDispatchItems(dispatchItems.filter((_, i) => i !== index));
   };
 
-  const handleSubmitDispatch = async (e) => {
+const handleSubmitDispatch = async (e) => {
     e.preventDefault();
     if (!selectedSoId) return alert("Please select a Sales Order.");
     if (!receivedById) return alert("Please select who received the delivery ('Received By').");
@@ -110,20 +110,29 @@ export default function SalesDispatch({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
+      
+      // Make sure we are sending exact keys backend expects
+      const payload = { 
+        soId: parseInt(selectedSoId, 10), // Ensure it's a number
+        dispatchedBy: receivedById,       // Backend expects 'dispatchedBy'
+        vehicleNumber: vehicleNo,         // Backend expects 'vehicleNumber'
+        remarks: remarks, 
+        items: dispatchItems.map(item => ({
+            productId: parseInt(item.productId, 10), // Ensure it's a number
+            quantity: parseInt(item.quantity, 10)    // Ensure it's a number
+        })) 
+      };
+
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'x-access-token': token 
         },
-        body: JSON.stringify({ 
-          salesOrderId: selectedSoId, 
-          receivedById, 
-          vehicleNo, 
-          remarks, 
-          items: dispatchItems 
-        })
+        body: JSON.stringify(payload)
       });
+
+      const data = await res.json(); // ALWAYS parse the response first
 
       if (res.ok) {
         setSelectedSoId('');
@@ -136,10 +145,12 @@ export default function SalesDispatch({ user }) {
         fetchData();
         alert("Daily Dispatch entry recorded successfully!");
       } else {
-        alert("Failed to save dispatch entry.");
+        // Now you will see exactly WHY it threw a 400 error!
+        alert(`Failed to save dispatch entry: ${data.error || 'Check server logs.'}`);
       }
     } catch (error) {
       console.error("Error submitting dispatch:", error);
+      alert(`Network Error: ${error.message}`);
     }
   };
 
