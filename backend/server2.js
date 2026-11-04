@@ -1207,33 +1207,40 @@ app.post('/api/production/batch/create', async (req, res) => {
     }
 });
 
-// 5. GET: Fetch Recent Finished Goods (Fixes the 500 Error on Load)
+// 5. GET: Fetch Recent Finished Goods (Isolated Execution to prevent 500 crash)
 app.get('/api/finished-goods', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
-            BEGIN
-                CREATE TABLE mridul.FinishedGoodsReceipt (
-                    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
-                    ReceiptNo VARCHAR(50),
-                    ProductionOrderID INT,
-                    ProductID INT,
-                    ProducedQuantity FLOAT,
-                    WastageQuantity FLOAT,
-                    LoggedBy VARCHAR(100),
-                    ReceiptDate DATETIME DEFAULT GETDATE()
-                )
-            END
-        `);
+        // STEP A: Create the table if it does not exist (Isolated execution)
+        try {
+            await pool.request().query(`
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
+                BEGIN
+                    CREATE TABLE mridul.FinishedGoodsReceipt (
+                        ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
+                        ReceiptNo VARCHAR(50),
+                        ProductionOrderID INT,
+                        ProductID INT,
+                        ProducedQuantity FLOAT,
+                        WastageQuantity FLOAT,
+                        LoggedBy VARCHAR(100),
+                        ReceiptDate DATETIME DEFAULT GETDATE()
+                    )
+                END
+            `);
+        } catch (tableErr) {
+            console.error('Table Creation Warning (May already exist or permission denied):', tableErr.message);
+            // We do not throw here; we let the SELECT statement try to run anyway
+        }
 
+        // STEP B: Fetch the data
         const result = await pool.request().query(`
             SELECT TOP 50 
                 fg.ReceiptNo, 
                 fg.ReceiptDate, 
                 'PRD-' + CAST(fg.ProductionOrderID AS VARCHAR) AS OrderNo,
-                p.ProductName,
+                ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
                 fg.ProducedQuantity,
                 fg.WastageQuantity,
                 fg.LoggedBy
@@ -1241,10 +1248,15 @@ app.get('/api/finished-goods', async (req, res) => {
             LEFT JOIN mridul.ProductMaster p ON fg.ProductID = p.ProductID
             ORDER BY fg.ReceiptDate DESC
         `);
+        
         res.status(200).json(result.recordset);
     } catch (err) {
+        // This will print the EXACT SQL error to your Node terminal/logs
         console.error('SQL Error in GET /api/finished-goods:', err.message);
-        res.status(500).json({ error: err.message });
+        res.status(500).json({ 
+            error: 'Database error while fetching finished goods.', 
+            details: err.message 
+        });
     }
 });
 
