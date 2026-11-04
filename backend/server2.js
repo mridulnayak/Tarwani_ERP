@@ -1299,7 +1299,7 @@ app.get('/api/finished-goods', async (req, res) => {
     }
 });
 
-// 7. POST: Log Finished Goods
+// 7. POST: Log Finished Goods (With Auto-Column Patching)
 app.post('/api/finished-goods', async (req, res) => {
     const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
@@ -1308,6 +1308,34 @@ app.post('/api/finished-goods', async (req, res) => {
     }
 
     const pool = await sql.connect(dbConfig);
+
+    try {
+        // Ensure table and all required columns exist safely
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
+            BEGIN
+                CREATE TABLE mridul.FinishedGoodsReceipt (
+                    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
+                    ReceiptNo VARCHAR(50),
+                    ProductionOrderID INT,
+                    ProductID INT,
+                    ProducedQuantity FLOAT,
+                    WastageQuantity FLOAT,
+                    LoggedBy VARCHAR(100),
+                    ReceiptDate DATETIME DEFAULT GETDATE()
+                )
+            END
+            
+            -- Auto-add ReceiptNo column if missing from older table schema
+            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]') AND name = 'ReceiptNo')
+            BEGIN
+                ALTER TABLE mridul.FinishedGoodsReceipt ADD ReceiptNo VARCHAR(50);
+            END
+        `);
+    } catch (schemaErr) {
+        console.error('Schema check warning:', schemaErr.message);
+    }
+
     const transaction = new sql.Transaction(pool);
 
     try {
@@ -1315,12 +1343,12 @@ app.post('/api/finished-goods', async (req, res) => {
         const receiptNo = `FGR-${Date.now()}`;
 
         const poReq = new sql.Request(transaction);
-        const poResult = await poReq
+        await poReq
             .input('poId', sql.Int, productionOrderId)
             .query(`
                 UPDATE mridul.ProductionOrder
                 SET Status = 'Completed'
-                WHERE ProductionOrderID = @poId AND Status != 'Completed'
+                WHERE ProductionOrderID = @poId
             `);
 
         await new sql.Request(transaction)
