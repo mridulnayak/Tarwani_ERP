@@ -1220,16 +1220,34 @@ app.get('/api/production/batches', async (req, res) => {
     }
 });
 
-// 5. POST: Create New Batch & Update Inventory
+// 5. POST: Create New Batch & Update Inventory (Bulletproof)
 app.post('/api/production/batch/create', async (req, res) => {
     const { OrderID, items } = req.body;
-    if (!OrderID || !items || items.length === 0) return res.status(400).json({ error: "Invalid batch data." });
-
-    const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
+    if (!OrderID || !items || items.length === 0) {
+        return res.status(400).json({ error: "Invalid batch data." });
+    }
 
     try {
+        const pool = await sql.connect(dbConfig);
+        
+        // Ensure ProductionBatch table exists with all required columns
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
+            BEGIN
+                CREATE TABLE mridul.ProductionBatch (
+                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
+                    BatchNo VARCHAR(50),
+                    OrderID INT,
+                    ProductID INT,
+                    QtyProduced FLOAT,
+                    ProductionDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+
+        const transaction = new sql.Transaction(pool);
         await transaction.begin();
+        
         const batchNo = `BTH-${Date.now()}`;
 
         for (const item of items) {
@@ -1245,11 +1263,10 @@ app.post('/api/production/batch/create', async (req, res) => {
         }
 
         await transaction.commit();
-        res.status(201).json({ message: "Batch Generated", batchNo });
+        return res.status(201).json({ message: "Batch Generated", batchNo });
     } catch (err) {
-        await transaction.rollback();
         console.error('Batch Creation Error:', err.message);
-        res.status(500).json({ error: err.message });
+        return res.status(500).json({ error: err.message });
     }
 });
 
