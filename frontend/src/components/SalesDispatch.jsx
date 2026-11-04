@@ -86,26 +86,23 @@ const handleSalesOrderChange = async (soId) => {
     label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
   }));
 
-  // 🚨 FOOLPROOF PRODUCT OPTIONS MAPPING
+// 🚨 FOOLPROOF PRODUCT OPTIONS MAPPING
   const productOptions = (soItemsList || []).map((item, index) => {
-    // 1. Forcefully grab any ID, Name, and Qty it can find
-    const pId = item.ProductID || item.productId || item.id || item.ItemID || `temp-${index}`;
-    const pName = item.ProductName || item.productName || item.ItemName || item.name || 'Unknown Product';
+    // Check F12 console to see exactly what columns came from the database!
+    const pId = item.ProductID || item.productId || item.ItemID || item.id;
+    const pName = item.ProductName || item.productName || item.ItemName || 'Unknown Product';
     const qty = item.Quantity || item.quantity || item.Qty || item.OrderedQty || 0;
 
     return {
-      value: String(pId),
+      // If pId is undefined, mark it explicitly so we can catch it
+      value: pId !== undefined && pId !== null ? String(pId) : `MISSING_ID_${index}`,
       label: `${pName} (Ordered: ${qty})`
     };
-  }).filter(opt => opt.value && opt.value !== 'undefined'); // ✅ Chained correctly directly to the map function!
-
-  // Check F12 console to see exactly what is being loaded into the dropdown
-  console.log("🛒 RAW SO ITEMS:", soItemsList);
-  console.log("✅ MAPPED DROPDOWN OPTIONS:", productOptions);
+  });
 
   const handleAddDispatchItem = () => {
-    if (!currentProduct.productId || currentProduct.productId === 'undefined') {
-      return alert("Technical Error: The selected product does not have a valid ID.");
+    if (!currentProduct.productId || currentProduct.productId.startsWith('MISSING_ID')) {
+      return alert("Technical Error: The database did not return a valid Product ID for this item. Please check your backend SQL query for SO Items.");
     }
     if (currentProduct.quantity <= 0) {
       return alert("Quantity must be greater than zero.");

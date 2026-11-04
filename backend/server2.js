@@ -1631,47 +1631,38 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// SALES ORDER ITEMS (FOR DISPATCH DROPDOWN)
+//SALES ORDER ITEMS
 // ==========================================
-app.get('/api/sales-dispatches', async (req, res) => {
+app.get('/api/sales-orders/:id/items', async (req, res) => {
     try {
+        const soId = parseInt(req.params.id, 10);
+        if (isNaN(soId)) {
+            return res.status(400).json({ error: "Invalid Sales Order ID format" });
+        }
+
         const pool = await sql.connect(dbConfig);
         
-        // Ensure table exists before querying to avoid crashes
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[SalesDispatch]'))
-            BEGIN
-                CREATE TABLE mridul.SalesDispatch (
-                    DispatchID INT IDENTITY(1,1) PRIMARY KEY,
-                    SO_ID INT NOT NULL,
-                    ProductID INT NOT NULL,
-                    DispatchedQty INT NOT NULL,
-                    VehicleNumber VARCHAR(50),
-                    DispatchedBy VARCHAR(100),
-                    DispatchDate DATETIME DEFAULT GETDATE()
-                )
-            END
-        `);
+        // 🔥 FIX: Added d.ProductID to the SELECT statement
+        // Note: If your column is named ItemID in SalesOrderDetail, change d.ProductID to d.ItemID AS ProductID
+        const result = await pool.request()
+            .input('soId', sql.Int, soId)
+            .query(`
+                SELECT 
+                    d.ProductID,
+                    ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
+                    ISNULL(d.Quantity, 0) AS Quantity,
+                    ISNULL(d.Rate, 0) AS Rate
+                FROM mridul.SalesOrderDetail d
+                LEFT JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+                WHERE d.SO_ID = @soId
+            `);
 
-        // Fetch the latest 50 dispatches automatically
-        const result = await pool.request().query(`
-            SELECT TOP 50 
-                d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
-                so.SONumber, ISNULL(p.ProductName, 'Unknown Product') AS ProductName
-            FROM mridul.SalesDispatch d
-            INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
-            INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
-            ORDER BY d.DispatchDate DESC
-        `);
-            
-        return res.status(200).json(result.recordset);
+        return res.status(200).json(result.recordset || []);
     } catch (err) {
-        console.error('Error fetching dispatches:', err.message);
-        // Explicitly return JSON so frontend never crashes with '<doctype'
-        return res.status(500).json({ error: 'Failed to fetch dispatch records' });
+        console.error('Error fetching SO items for dispatch:', err.message);
+        return res.status(500).json({ error: 'Failed to fetch order items' });
     }
 });
-
 // 2. POST: The Ultimate Defensive Sales Dispatch Route
 app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     let transaction; // Declare outside for safe rollback
