@@ -102,11 +102,6 @@ app.post('/api/login', async (req, res) => {
 
 //to protect all routes
 app.use('/api', authenticateToken);
-// VS Code Terminal mein live tracking ke liye
-app.use((req, res, next) => {
-    console.log(`🔥 [INCOMING REQUEST] Method: ${req.method} | URL: ${req.url}`);
-    next();
-});
 // ==========================================
 // ROLE ALLOCATION & SECURITY ROUTES
 // ==========================================
@@ -412,7 +407,9 @@ app.post('/api/brands/delete/:id', async (req, res) => {
 // ==========================================
 
 // 1. Load Pending Items for a specific Master Order
-app.get('/api/production/order/:orderNo', async (req, res) => {
+app.get('/api/production/order/:orderNo', async (req, res, next) => {
+    if (/^\d+$/.test(req.params.orderNo)) return next();
+
     try {
         const { orderNo } = req.params;
         const pool = await sql.connect(dbConfig);
