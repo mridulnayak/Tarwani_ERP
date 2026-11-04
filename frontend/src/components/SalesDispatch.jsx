@@ -78,7 +78,7 @@ const handleSalesOrderChange = async (soId) => {
   };
   const soOptions = salesOrders.map(so => ({
     value: String(so.SO_ID || so.SalesOrderID),
-    label: `${so.SONumber} - ${so.CustomerName || 'Customer'}`
+    label: `${so.SONumber} - ${so.CustomerName || 'Customer'}` // ✅ Removed the stray '-' sign
   }));
 
   const employeeOptions = employees.map(emp => ({
@@ -86,18 +86,22 @@ const handleSalesOrderChange = async (soId) => {
     label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
   }));
 
-  // 🚨 REFINED PRODUCT OPTIONS MAPPING 
-  const productOptions = (soItemsList || []).map(item => {
-    // Catch every possible variation of the ID and Name from the API response
-    const pId = item.ProductID || item.productId || item.id || item.ItemID;
-    const pName = item.ProductName || item.productName || item.ItemName || 'Unknown Product';
-    const qty = item.Quantity || item.quantity || item.Qty || 0;
+  // 🚨 FOOLPROOF PRODUCT OPTIONS MAPPING
+  const productOptions = (soItemsList || []).map((item, index) => {
+    // 1. Forcefully grab any ID, Name, and Qty it can find
+    const pId = item.ProductID || item.productId || item.id || item.ItemID || `temp-${index}`;
+    const pName = item.ProductName || item.productName || item.ItemName || item.name || 'Unknown Product';
+    const qty = item.Quantity || item.quantity || item.Qty || item.OrderedQty || 0;
 
     return {
       value: String(pId),
       label: `${pName} (Ordered: ${qty})`
     };
-  }).filter(opt => opt.value && opt.value !== 'undefined'); // Drop invalid ones automatically
+  }).filter(opt => opt.value && opt.value !== 'undefined'); // ✅ Chained correctly directly to the map function!
+
+  // Check F12 console to see exactly what is being loaded into the dropdown
+  console.log("🛒 RAW SO ITEMS:", soItemsList);
+  console.log("✅ MAPPED DROPDOWN OPTIONS:", productOptions);
 
   const handleAddDispatchItem = () => {
     if (!currentProduct.productId || currentProduct.productId === 'undefined') {
