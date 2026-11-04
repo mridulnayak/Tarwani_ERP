@@ -18,8 +18,14 @@ export default function FinishedGoods() {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
-      const data = await res.json();
-      setInProgressOrders((Array.isArray(data) ? data : []).filter(po => po.Status === 'In Progress'));
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        setInProgressOrders((Array.isArray(data) ? data : []).filter(po => po.Status === 'In Progress'));
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setInProgressOrders([]);
+      }
     } catch (error) {
       console.error("Error fetching production orders:", error);
     }
@@ -49,9 +55,15 @@ export default function FinishedGoods() {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
-      const products = await res.json();
-      const match = (Array.isArray(products) ? products : []).find(p => p.ProductName === productName);
-      if (match) setProductId(match.ProductID);
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const products = await res.json();
+        const match = (Array.isArray(products) ? products : []).find(p => p.ProductName === productName);
+        if (match) setProductId(match.ProductID);
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setProductId('');
+      }
     } catch (error) {
       console.error("Error matching product ID:", error);
     }

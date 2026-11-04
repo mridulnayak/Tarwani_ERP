@@ -1051,6 +1051,27 @@ app.post('/api/purchase-receivings', async (req, res) => {
 // PRODUCTION BATCH ENTRY ROUTES
 // ==========================================
 
+// GET: Fetch recent production batches
+app.get('/api/production/batches', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT TOP 50 
+                pb.BatchNo, 
+                pb.ProductionDate, 
+                'PRD-' + CAST(pb.OrderID AS VARCHAR) AS OrderNo,
+                pb.QtyProduced
+            FROM mridul.ProductionBatch pb
+            ORDER BY pb.ProductionDate DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('SQL Error in GET /api/production/batches:', err.message);
+        // We must return JSON even on errors to prevent the frontend HTML crash
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // GET: Load single order details for Production Entry
 app.get('/api/production/order/:id', async (req, res) => {
     try {

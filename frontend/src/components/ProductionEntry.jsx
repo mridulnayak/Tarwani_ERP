@@ -22,14 +22,33 @@ export default function ProductionEntry({ user }) {
       const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
         headers: { 'x-access-token': token }
       });
-      const poData = poRes.ok ? await poRes.json() : [];
-      setProductionOrders(Array.isArray(poData) ? poData : []);
+      const poContentType = poRes.headers.get("content-type");
+      if (poContentType && poContentType.includes("application/json")) {
+        const poData = poRes.ok ? await poRes.json() : [];
+        setProductionOrders(Array.isArray(poData) ? poData : []);
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setProductionOrders([]);
+      }
 
       const batchRes = await fetch('https://sms.uvtechsolutions.co.in/api/production/batches', {
         headers: { 'x-access-token': token }
-      }).catch(() => ({ ok: false })); 
-      const batchData = batchRes.ok ? await batchRes.json() : [];
-      setRecentBatches(Array.isArray(batchData) ? batchData : []);
+      }).catch((error) => {
+        console.error("Error fetching recent batches:", error);
+        return null;
+      });
+      if (batchRes) {
+        const batchContentType = batchRes.headers.get("content-type");
+        if (batchContentType && batchContentType.includes("application/json")) {
+          const batchData = batchRes.ok ? await batchRes.json() : [];
+          setRecentBatches(Array.isArray(batchData) ? batchData : []);
+        } else {
+          console.error("Server returned non-JSON response. API route missing or server crashed.");
+          setRecentBatches([]);
+        }
+      } else {
+        setRecentBatches([]);
+      }
     } catch (error) {
       console.error("Error fetching data:", error);
     }
@@ -58,12 +77,19 @@ export default function ProductionEntry({ user }) {
         headers: { 'x-access-token': token }
       });
       
-      if (!res.ok) throw new Error("Order not found or completed.");
-      
-      const data = await res.json();
-      setActiveOrder(data.order);
-      setPendingItems(data.items);
-      setProductionInputs({});
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        if (!res.ok) throw new Error("Order not found or completed.");
+
+        const data = await res.json();
+        setActiveOrder(data.order);
+        setPendingItems(data.items);
+        setProductionInputs({});
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setActiveOrder(null);
+        setPendingItems([]);
+      }
     } catch (error) {
       console.error(error);
       alert("Could not load pending items for this order.");

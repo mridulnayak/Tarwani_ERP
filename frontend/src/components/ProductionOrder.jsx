@@ -23,16 +23,28 @@ export default function ProductionOrder({ user }) {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
-      const prodData = await prodRes.json();
-      setProducts(Array.isArray(prodData) ? prodData : []);
+      const prodContentType = prodRes.headers.get("content-type");
+      if (prodContentType && prodContentType.includes("application/json")) {
+        const prodData = await prodRes.json();
+        setProducts(Array.isArray(prodData) ? prodData : []);
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setProducts([]);
+      }
 
       // Fetch Production Orders
       const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
-      const poData = await poRes.json();
-      setProductionOrders(Array.isArray(poData) ? poData : []);
+      const poContentType = poRes.headers.get("content-type");
+      if (poContentType && poContentType.includes("application/json")) {
+        const poData = await poRes.json();
+        setProductionOrders(Array.isArray(poData) ? poData : []);
+      } else {
+        console.error("Server returned non-JSON response. API route missing or server crashed.");
+        setProductionOrders([]);
+      }
     } catch (error) {
       console.error("Error fetching production data:", error);
     }
@@ -71,8 +83,14 @@ export default function ProductionOrder({ user }) {
         setIsFormVisible(false);
         fetchData(); 
       } else {
-        const err = await res.json();
-        alert(`Failed to generate Production Order: ${err.error || 'Unknown error'}`);
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          const err = await res.json();
+          alert(`Failed to generate Production Order: ${err.error || 'Unknown error'}`);
+        } else {
+          console.error("Server returned non-JSON response. API route missing or server crashed.");
+          alert("Failed to generate Production Order.");
+        }
       }
     } catch (error) {
       console.error("Error submitting production order:", error);
