@@ -1075,29 +1075,76 @@ app.get('/api/production-orders', async (req, res) => {
     }
 });
 
-// 2. GET: Load single order details (Fixes the 404 Error shown in screenshot)
+// 2. POST: Create New Production Order (MISSING FROM YOUR SNIPPET - ADDED HERE)
+app.post('/api/production-orders', async (req, res) => {
+    try {
+        const { productId, targetQuantity, salesOrderRef } = req.body;
+        if (!productId || !targetQuantity) {
+            return res.status(400).json({ error: 'Product and Target Quantity are required' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Isolated Table Creation
+        try {
+            await pool.request().query(`
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionOrder]'))
+                BEGIN
+                    CREATE TABLE mridul.ProductionOrder (
+                        ProductionOrderID INT IDENTITY(1,1) PRIMARY KEY,
+                        ProductID INT NOT NULL,
+                        TargetQuantity FLOAT NOT NULL,
+                        SalesOrderRef VARCHAR(50),
+                        Status VARCHAR(20) DEFAULT 'Pending',
+                        OrderDate DATETIME DEFAULT GETDATE()
+                    )
+                END
+            `);
+        } catch (tableErr) {
+            console.error('ProductionOrder Table Creation Warning:', tableErr.message);
+        }
+
+        await pool.request()
+            .input('productId', sql.Int, productId)
+            .input('targetQty', sql.Float, targetQuantity)
+            .input('salesRef', sql.VarChar, salesOrderRef || '')
+            .query(`
+                INSERT INTO mridul.ProductionOrder (ProductID, TargetQuantity, SalesOrderRef, Status, OrderDate)
+                VALUES (@productId, @targetQty, @salesRef, 'Pending', GETDATE())
+            `);
+
+        res.status(201).json({ message: 'Production Order generated successfully!' });
+    } catch (err) {
+        console.error('SQL Error in POST /api/production-orders:', err.message);
+        res.status(500).json({ error: `Database Error: ${err.message}` });
+    }
+});
+
+// 3. GET: Load single order details (Fixes the 404 Error)
 app.get('/api/production/order/:id', async (req, res) => {
     try {
-        // Strip out 'PRD-' to ensure we only query the integer ID
         const orderId = parseInt(req.params.id.toString().replace(/\D/g, ''), 10);
         if (isNaN(orderId)) return res.status(400).json({ error: "Invalid Order ID." });
 
         const pool = await sql.connect(dbConfig);
         
-        // Auto-create ProductionBatch table to prevent 500 errors during SUM
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
-            BEGIN
-                CREATE TABLE mridul.ProductionBatch (
-                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
-                    BatchNo VARCHAR(50),
-                    OrderID INT,
-                    ProductID INT,
-                    QtyProduced FLOAT,
-                    ProductionDate DATETIME DEFAULT GETDATE()
-                )
-            END
-        `);
+        try {
+            await pool.request().query(`
+                IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
+                BEGIN
+                    CREATE TABLE mridul.ProductionBatch (
+                        BatchID INT IDENTITY(1,1) PRIMARY KEY,
+                        BatchNo VARCHAR(50),
+                        OrderID INT,
+                        ProductID INT,
+                        QtyProduced FLOAT,
+                        ProductionDate DATETIME DEFAULT GETDATE()
+                    )
+                END
+            `);
+        } catch (tableErr) {
+            console.error('ProductionBatch Table Creation Warning:', tableErr.message);
+        }
 
         const orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
@@ -1139,25 +1186,10 @@ app.get('/api/production/order/:id', async (req, res) => {
     }
 });
 
-// 3. GET: Fetch Recent Batches (Fixes missing batch list)
+// 4. GET: Fetch Recent Batches
 app.get('/api/production/batches', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
-            BEGIN
-                CREATE TABLE mridul.ProductionBatch (
-                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
-                    BatchNo VARCHAR(50),
-                    OrderID INT,
-                    ProductID INT,
-                    QtyProduced FLOAT,
-                    ProductionDate DATETIME DEFAULT GETDATE()
-                )
-            END
-        `);
-
         const result = await pool.request().query(`
             SELECT TOP 50 
                 pb.BatchNo, 
@@ -1174,7 +1206,7 @@ app.get('/api/production/batches', async (req, res) => {
     }
 });
 
-// 4. POST: Create New Batch & Update Inventory
+// 5. POST: Create New Batch & Update Inventory
 app.post('/api/production/batch/create', async (req, res) => {
     const { OrderID, items } = req.body;
     if (!OrderID || !items || items.length === 0) return res.status(400).json({ error: "Invalid batch data." });
@@ -1207,12 +1239,11 @@ app.post('/api/production/batch/create', async (req, res) => {
     }
 });
 
-// 5. GET: Fetch Recent Finished Goods (Isolated Execution to prevent 500 crash)
+// 6. GET: Fetch Recent Finished Goods (Isolated Execution to prevent 500 crash)
 app.get('/api/finished-goods', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         
-        // STEP A: Create the table if it does not exist (Isolated execution)
         try {
             await pool.request().query(`
                 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
@@ -1230,11 +1261,9 @@ app.get('/api/finished-goods', async (req, res) => {
                 END
             `);
         } catch (tableErr) {
-            console.error('Table Creation Warning (May already exist or permission denied):', tableErr.message);
-            // We do not throw here; we let the SELECT statement try to run anyway
+            console.error('FinishedGoodsReceipt Table Creation Warning:', tableErr.message);
         }
 
-        // STEP B: Fetch the data
         const result = await pool.request().query(`
             SELECT TOP 50 
                 fg.ReceiptNo, 
@@ -1251,16 +1280,12 @@ app.get('/api/finished-goods', async (req, res) => {
         
         res.status(200).json(result.recordset);
     } catch (err) {
-        // This will print the EXACT SQL error to your Node terminal/logs
         console.error('SQL Error in GET /api/finished-goods:', err.message);
-        res.status(500).json({ 
-            error: 'Database error while fetching finished goods.', 
-            details: err.message 
-        });
+        res.status(500).json({ error: 'Database error while fetching finished goods.', details: err.message });
     }
 });
 
-// 6. POST: Log Finished Goods
+// 7. POST: Log Finished Goods
 app.post('/api/finished-goods', async (req, res) => {
     const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
