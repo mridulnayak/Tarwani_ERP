@@ -1048,40 +1048,66 @@ app.post('/api/purchase-receivings', async (req, res) => {
 });
 
 // ==========================================
-// PRODUCTION BATCH ENTRY ROUTES
+// COMPLETE PRODUCTION & BATCH ENTRY ROUTES
 // ==========================================
 
-// GET: Fetch recent production batches
-app.get('/api/production/batches', async (req, res) => {
+// 1. GET: Fetch all Production Orders
+app.get('/api/production-orders', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
-            SELECT TOP 50 
-                pb.BatchNo, 
-                pb.ProductionDate, 
-                'PRD-' + CAST(pb.OrderID AS VARCHAR) AS OrderNo,
-                pb.QtyProduced
-            FROM mridul.ProductionBatch pb
-            ORDER BY pb.ProductionDate DESC
+            SELECT 
+                po.ProductionOrderID, 
+                'PRD-' + CAST(po.ProductionOrderID AS VARCHAR) AS OrderNo,
+                ISNULL(po.OrderDate, GETDATE()) AS OrderDate, 
+                ISNULL(po.Status, 'Pending') AS Status,
+                ISNULL(po.TargetQuantity, 0) AS TargetQuantity,
+                po.ProductID,
+                ISNULL(p.ProductName, 'Unknown Product') AS ProductName
+            FROM mridul.ProductionOrder po
+            LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
+            ORDER BY po.ProductionOrderID DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
-        console.error('SQL Error in GET /api/production/batches:', err.message);
-        // We must return JSON even on errors to prevent the frontend HTML crash
+        console.error('SQL Error in GET /api/production-orders:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
-// GET: Load single order details for Production Entry
+// 2. POST: Create New Production Order
+app.post('/api/production-orders', async (req, res) => {
+    try {
+        const { productId, targetQuantity, salesOrderRef } = req.body;
+        if (!productId || !targetQuantity) {
+            return res.status(400).json({ error: 'Product and Target Quantity are required' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        await pool.request()
+            .input('productId', sql.Int, productId)
+            .input('targetQty', sql.Int, targetQuantity)
+            .input('salesRef', sql.VarChar, salesOrderRef || null)
+            .query(`
+                INSERT INTO mridul.ProductionOrder (ProductID, TargetQuantity, SalesOrderRef, Status, OrderDate)
+                VALUES (@productId, @targetQty, @salesRef, 'Pending', GETDATE())
+            `);
+
+        res.status(201).json({ message: 'Production Order generated successfully!' });
+    } catch (err) {
+        console.error('SQL Error in POST /api/production-orders:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. GET: Load single order details for Batch Entry
 app.get('/api/production/order/:id', async (req, res) => {
     try {
-        // Automatically extract only the number (handles both "8" and "PRD-8")
+        // Strip out 'PRD-' to ensure we only query the integer ID
         const orderId = parseInt(req.params.id.toString().replace(/\D/g, ''), 10);
-        
         if (isNaN(orderId)) return res.status(400).json({ error: "Invalid Order ID." });
 
         const pool = await sql.connect(dbConfig);
-        
         const orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
             .query(`
@@ -1093,38 +1119,146 @@ app.get('/api/production/order/:id', async (req, res) => {
                     po.ProductID,
                     ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
                     po.TargetQuantity AS QtyRequired,
-                    ISNULL((SELECT SUM(QtyProduced) FROM mridul.ProductionBatch WHERE OrderID = @orderId), 0) AS QtyCompleted
+                    ISNULL((
+                        SELECT SUM(QtyProduced) 
+                        FROM sys.objects so 
+                        JOIN mridul.ProductionBatch pb ON so.object_id = OBJECT_ID(N'[mridul].[ProductionBatch]')
+                        WHERE pb.OrderID = @orderId
+                    ), 0) AS QtyCompleted
                 FROM mridul.ProductionOrder po
                 LEFT JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
                 WHERE po.ProductionOrderID = @orderId
             `);
 
-        if (orderResult.recordset.length === 0) {
-            return res.status(404).json({ error: "Order not found." });
-        }
+        if (orderResult.recordset.length === 0) return res.status(404).json({ error: "Order not found." });
 
         const orderData = orderResult.recordset[0];
-        
         res.status(200).json({
-            order: {
-                OrderID: orderData.OrderID,
-                OrderNo: orderData.OrderNo,
-                Status: orderData.Status
-            },
+            order: { OrderID: orderData.OrderID, OrderNo: orderData.OrderNo, Status: orderData.Status },
             items: [{
                 ItemID: orderData.OrderID, 
                 ProductID: orderData.ProductID,
                 ProductName: orderData.ProductName,
                 QtyRequired: orderData.QtyRequired,
-                QtyCompleted: orderData.QtyCompleted
+                QtyCompleted: orderData.QtyCompleted || 0
             }]
         });
     } catch (err) {
-        console.error('Error fetching order for production entry:', err.message);
+        console.error('Error fetching order:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
 
+// 4. GET: Fetch Recent Batches (Fixes 500 Error via Auto-Create)
+app.get('/api/production/batches', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        
+        // Safety check: Auto-create the table if it does not exist
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
+            BEGIN
+                CREATE TABLE mridul.ProductionBatch (
+                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
+                    BatchNo VARCHAR(50),
+                    OrderID INT,
+                    ProductID INT,
+                    QtyProduced FLOAT,
+                    ProductionDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+
+        const result = await pool.request().query(`
+            SELECT TOP 50 
+                pb.BatchNo, 
+                pb.ProductionDate, 
+                'PRD-' + CAST(pb.OrderID AS VARCHAR) AS OrderNo,
+                pb.QtyProduced
+            FROM mridul.ProductionBatch pb
+            ORDER BY pb.ProductionDate DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('SQL Error in Batches:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 5. POST: Create New Batch & Update Inventory (Fixes 404 Error)
+app.post('/api/production/batch/create', async (req, res) => {
+    const { OrderID, items } = req.body;
+    if (!OrderID || !items || items.length === 0) {
+        return res.status(400).json({ error: "Invalid batch data." });
+    }
+
+    const pool = await sql.connect(dbConfig);
+    const transaction = new sql.Transaction(pool);
+
+    try {
+        await transaction.begin();
+        const batchNo = `BTH-${Date.now()}`;
+
+        // Safety check: Auto-create table before inserting
+        await new sql.Request(transaction).query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
+            BEGIN
+                CREATE TABLE mridul.ProductionBatch (
+                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
+                    BatchNo VARCHAR(50),
+                    OrderID INT,
+                    ProductID INT,
+                    QtyProduced FLOAT,
+                    ProductionDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+
+        for (const item of items) {
+            // 1. Log the Batch
+            await new sql.Request(transaction)
+                .input('batchNo', sql.VarChar, batchNo)
+                .input('orderId', sql.Int, OrderID)
+                .input('productId', sql.Int, item.ProductID)
+                .input('qty', sql.Float, item.QtyProduced)
+                .query(`
+                    INSERT INTO mridul.ProductionBatch (BatchNo, OrderID, ProductID, QtyProduced, ProductionDate)
+                    VALUES (@batchNo, @orderId, @productId, @qty, GETDATE())
+                `);
+
+            // 2. Add newly produced goods to the warehouse inventory
+            await new sql.Request(transaction)
+                .input('productId', sql.Int, item.ProductID)
+                .input('qty', sql.Float, item.QtyProduced)
+                .query(`
+                    UPDATE mridul.ProductMaster 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty 
+                    WHERE ProductID = @productId
+                `);
+        }
+
+        // 3. Mark the Master Production Order as 'Completed' if the target is met
+        await new sql.Request(transaction)
+            .input('orderId', sql.Int, OrderID)
+            .query(`
+                UPDATE mridul.ProductionOrder
+                SET Status = 'Completed'
+                WHERE ProductionOrderID = @orderId
+                AND TargetQuantity <= (
+                    SELECT ISNULL(SUM(QtyProduced), 0) 
+                    FROM mridul.ProductionBatch 
+                    WHERE OrderID = @orderId
+                )
+            `);
+
+        await transaction.commit();
+        res.status(201).json({ message: "Batch Generated", batchNo });
+    } catch (err) {
+        await transaction.rollback();
+        console.error('Batch Creation Error:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES
 // ==========================================
@@ -1262,14 +1396,55 @@ app.get('/api/issuals', async (req, res) => {
 // FINISHED GOODS / PRODUCTION COMPLETION
 // ==========================================
 
+// 1. GET: Fetch Recent Finished Goods Receipts (With Auto-Table Create)
+app.get('/api/finished-goods', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        
+        // Safety: Auto-create table if missing
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
+            BEGIN
+                CREATE TABLE mridul.FinishedGoodsReceipt (
+                    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
+                    ReceiptNo VARCHAR(50),
+                    ProductionOrderID INT,
+                    ProductID INT,
+                    ProducedQuantity FLOAT,
+                    WastageQuantity FLOAT,
+                    LoggedBy VARCHAR(100),
+                    ReceiptDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+
+        const result = await pool.request().query(`
+            SELECT TOP 50 
+                fg.ReceiptNo, 
+                fg.ReceiptDate, 
+                'PRD-' + CAST(fg.ProductionOrderID AS VARCHAR) AS OrderNo,
+                p.ProductName,
+                fg.ProducedQuantity,
+                fg.WastageQuantity,
+                fg.LoggedBy
+            FROM mridul.FinishedGoodsReceipt fg
+            LEFT JOIN mridul.ProductMaster p ON fg.ProductID = p.ProductID
+            ORDER BY fg.ReceiptDate DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('SQL Error in GET /api/finished-goods:', err.message);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. POST: Log Finished Goods and Update Main Inventory
 app.post('/api/finished-goods', async (req, res) => {
     const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
-    // Enhanced Validation: Prevent negative inputs
     if (!productionOrderId || !productId || producedQty == null || producedQty <= 0) {
-        return res.status(400).json({ error: 'Valid Production Order, Product, and a positive Produced Quantity are required.' });
+        return res.status(400).json({ error: 'Valid Production Order, Product, and positive Produced Quantity required.' });
     }
-
     if (wastageQty != null && wastageQty < 0) {
         return res.status(400).json({ error: 'Wastage quantity cannot be negative.' });
     }
@@ -1279,6 +1454,24 @@ app.post('/api/finished-goods', async (req, res) => {
 
     try {
         await transaction.begin(); 
+        const receiptNo = `FGR-${Date.now()}`;
+
+        // Ensure table exists inside the transaction workflow
+        await new sql.Request(transaction).query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
+            BEGIN
+                CREATE TABLE mridul.FinishedGoodsReceipt (
+                    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
+                    ReceiptNo VARCHAR(50),
+                    ProductionOrderID INT,
+                    ProductID INT,
+                    ProducedQuantity FLOAT,
+                    WastageQuantity FLOAT,
+                    LoggedBy VARCHAR(100),
+                    ReceiptDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
 
         // 1. Mark Production Order as Completed FIRST (Double-Entry Protection)
         const poReq = new sql.Request(transaction);
@@ -1290,7 +1483,6 @@ app.post('/api/finished-goods', async (req, res) => {
                 WHERE ProductionOrderID = @poId AND Status != 'Completed'
             `);
 
-        // If rowsAffected is 0, it means the order doesn't exist OR was already completed!
         if (poResult.rowsAffected[0] === 0) {
             throw new Error('ALREADY_COMPLETED'); 
         }
@@ -1298,21 +1490,22 @@ app.post('/api/finished-goods', async (req, res) => {
         // 2. Log the Finished Good Receipt
         const receiptReq = new sql.Request(transaction);
         await receiptReq
+            .input('receiptNo', sql.VarChar, receiptNo)
             .input('poId', sql.Int, productionOrderId)
             .input('productId', sql.Int, productId)
-            .input('produced', sql.Int, producedQty)
-            .input('wastage', sql.Int, wastageQty || 0)
+            .input('produced', sql.Float, producedQty)
+            .input('wastage', sql.Float, wastageQty || 0)
             .input('loggedBy', sql.VarChar, loggedBy || 'System')
             .query(`
-                INSERT INTO mridul.FinishedGoodsReceipt (ProductionOrderID, ProductID, ProducedQuantity, WastageQuantity, LoggedBy)
-                VALUES (@poId, @productId, @produced, @wastage, @loggedBy)
+                INSERT INTO mridul.FinishedGoodsReceipt (ReceiptNo, ProductionOrderID, ProductID, ProducedQuantity, WastageQuantity, LoggedBy)
+                VALUES (@receiptNo, @poId, @productId, @produced, @wastage, @loggedBy)
             `);
 
         // 3. Increase Product Closing Balance (Finished Goods Inventory)
         const stockReq = new sql.Request(transaction);
         await stockReq
             .input('productId', sql.Int, productId)
-            .input('qty', sql.Int, producedQty)
+            .input('qty', sql.Float, producedQty)
             .query(`
                 UPDATE mridul.ProductMaster
                 SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty
@@ -1320,24 +1513,16 @@ app.post('/api/finished-goods', async (req, res) => {
             `);
 
         await transaction.commit(); 
-        res.status(201).json({ message: 'Finished goods logged and inventory updated successfully!' });
+        res.status(201).json({ message: 'Finished goods logged and inventory updated successfully!', receiptNo });
 
     } catch (err) {
-        // Safe Rollback
-        try {
-            await transaction.rollback(); 
-        } catch (rollbackErr) {
-            console.error('Rollback failed:', rollbackErr);
-        }
-
-        console.error('Finished Goods Transaction Failed:', err.message || err);
-
-        // Friendly error for the frontend
+        try { await transaction.rollback(); } catch (rollbackErr) { console.error(rollbackErr); }
+        
         if (err.message === 'ALREADY_COMPLETED') {
-            return res.status(400).json({ error: 'This production order has already been completed.' });
+            return res.status(400).json({ error: 'This production order has already been transferred to Finished Goods.' });
         }
-
-        res.status(500).json({ error: 'Failed to log finished goods' });
+        console.error('Finished Goods Transaction Failed:', err.message);
+        res.status(500).json({ error: 'Failed to log finished goods.' });
     }
 });
 
