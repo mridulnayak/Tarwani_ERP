@@ -402,131 +402,131 @@ app.post('/api/brands/delete/:id', async (req, res) => {
     }
 });
 
-// ==========================================
-// PRODUCTION BATCH ENTRY ROUTES
-// ==========================================
+// // ==========================================
+// // PRODUCTION BATCH ENTRY ROUTES
+// // ==========================================
 
-// 1. Load Pending Items for a specific Master Order
-app.get('/api/production/order/:orderNo', async (req, res, next) => {
-    if (/^\d+$/.test(req.params.orderNo)) return next();
+// // 1. Load Pending Items for a specific Master Order
+// app.get('/api/production/order/:orderNo', async (req, res, next) => {
+//     if (/^\d+$/.test(req.params.orderNo)) return next();
 
-    try {
-        const { orderNo } = req.params;
-        const pool = await sql.connect(dbConfig);
+//     try {
+//         const { orderNo } = req.params;
+//         const pool = await sql.connect(dbConfig);
         
-        // Fetch Master Order
-        const orderResult = await pool.request()
-            .input('orderNo', sql.VarChar, orderNo)
-            .query(`SELECT * FROM mridul.ProductionOrders WHERE OrderNo = @orderNo`);
+//         // Fetch Master Order
+//         const orderResult = await pool.request()
+//             .input('orderNo', sql.VarChar, orderNo)
+//             .query(`SELECT * FROM mridul.ProductionOrders WHERE OrderNo = @orderNo`);
             
-        if (orderResult.recordset.length === 0) {
-            return res.status(404).json({ error: 'Order not found' });
-        }
+//         if (orderResult.recordset.length === 0) {
+//             return res.status(404).json({ error: 'Order not found' });
+//         }
         
-        const order = orderResult.recordset[0];
+//         const order = orderResult.recordset[0];
 
-        // Fetch Items linked to this order that are NOT fully completed
-        const itemsResult = await pool.request()
-            .input('orderId', sql.Int, order.OrderID)
-            .query(`
-                SELECT i.ItemID, i.ProductID, p.ProductName, i.QtyRequired, i.QtyCompleted, i.ItemStatus
-                FROM mridul.ProductionItems i
-                INNER JOIN mridul.ProductMaster p ON i.ProductID = p.ProductID
-                WHERE i.OrderID = @orderId AND i.ItemStatus = 'Pending'
-            `);
+//         // Fetch Items linked to this order that are NOT fully completed
+//         const itemsResult = await pool.request()
+//             .input('orderId', sql.Int, order.OrderID)
+//             .query(`
+//                 SELECT i.ItemID, i.ProductID, p.ProductName, i.QtyRequired, i.QtyCompleted, i.ItemStatus
+//                 FROM mridul.ProductionItems i
+//                 INNER JOIN mridul.ProductMaster p ON i.ProductID = p.ProductID
+//                 WHERE i.OrderID = @orderId AND i.ItemStatus = 'Pending'
+//             `);
 
-        res.status(200).json({ order, items: itemsResult.recordset });
-    } catch (err) {
-        console.error("Error loading order:", err);
-        res.status(500).json({ error: 'Server error loading order' });
-    }
-});
+//         res.status(200).json({ order, items: itemsResult.recordset });
+//     } catch (err) {
+//         console.error("Error loading order:", err);
+//         res.status(500).json({ error: 'Server error loading order' });
+//     }
+// });
 
-// 2. Generate Batch and Update Partial Fulfillments
-app.post('/api/production/batch/create', async (req, res) => {
-    try {
-        // Point 9 Implementation: Auto-logging the user from the JWT token
-        const processedBy = req.user ? req.user.username : 'UnknownUser';
-        const { OrderID, items } = req.body;
+// // 2. Generate Batch and Update Partial Fulfillments
+// app.post('/api/production/batch/create', async (req, res) => {
+//     try {
+//         // Point 9 Implementation: Auto-logging the user from the JWT token
+//         const processedBy = req.user ? req.user.username : 'UnknownUser';
+//         const { OrderID, items } = req.body;
         
-        if (!OrderID || !items || items.length === 0) {
-            return res.status(400).json({ error: 'Invalid batch data' });
-        }
+//         if (!OrderID || !items || items.length === 0) {
+//             return res.status(400).json({ error: 'Invalid batch data' });
+//         }
 
-        // Generate a unique Batch No (e.g., BATCH-1704234567)
-        const batchNo = `BATCH-${Date.now()}`;
-        const pool = await sql.connect(dbConfig);
+//         // Generate a unique Batch No (e.g., BATCH-1704234567)
+//         const batchNo = `BATCH-${Date.now()}`;
+//         const pool = await sql.connect(dbConfig);
         
-        // Start a SQL Transaction to ensure data integrity
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
+//         // Start a SQL Transaction to ensure data integrity
+//         const transaction = new sql.Transaction(pool);
+//         await transaction.begin();
 
-        try {
-            const request = new sql.Request(transaction);
+//         try {
+//             const request = new sql.Request(transaction);
             
-            for (const item of items) {
-                // A. Insert into ProductionBatches (The Execution Log)
-                await request
-                    .input('orderId_' + item.ItemID, sql.Int, OrderID)
-                    .input('batchNo_' + item.ItemID, sql.VarChar, batchNo)
-                    .input('productId_' + item.ItemID, sql.Int, item.ProductID)
-                    .input('qty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
-                    .input('user_' + item.ItemID, sql.VarChar, processedBy)
-                    .query(`
-                        INSERT INTO mridul.ProductionBatches (OrderID, BatchNo, ProductID, QtyProduced, ProcessedBy)
-                        VALUES (@orderId_${item.ItemID}, @batchNo_${item.ItemID}, @productId_${item.ItemID}, @qty_${item.ItemID}, @user_${item.ItemID})
-                    `);
+//             for (const item of items) {
+//                 // A. Insert into ProductionBatches (The Execution Log)
+//                 await request
+//                     .input('orderId_' + item.ItemID, sql.Int, OrderID)
+//                     .input('batchNo_' + item.ItemID, sql.VarChar, batchNo)
+//                     .input('productId_' + item.ItemID, sql.Int, item.ProductID)
+//                     .input('qty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+//                     .input('user_' + item.ItemID, sql.VarChar, processedBy)
+//                     .query(`
+//                         INSERT INTO mridul.ProductionBatches (OrderID, BatchNo, ProductID, QtyProduced, ProcessedBy)
+//                         VALUES (@orderId_${item.ItemID}, @batchNo_${item.ItemID}, @productId_${item.ItemID}, @qty_${item.ItemID}, @user_${item.ItemID})
+//                     `);
 
-                // B. Update QtyCompleted in the original ProductionItems list
-                await request
-                    .input('itemId_' + item.ItemID, sql.Int, item.ItemID)
-                    .input('addQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
-                    .query(`
-                        UPDATE mridul.ProductionItems 
-                        SET QtyCompleted = QtyCompleted + @addQty_${item.ItemID},
-                            ItemStatus = CASE 
-                                WHEN (QtyCompleted + @addQty_${item.ItemID}) >= QtyRequired THEN 'Completed' 
-                                ELSE 'Pending' 
-                            END
-                        WHERE ItemID = @itemId_${item.ItemID}
-                    `);
+//                 // B. Update QtyCompleted in the original ProductionItems list
+//                 await request
+//                     .input('itemId_' + item.ItemID, sql.Int, item.ItemID)
+//                     .input('addQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+//                     .query(`
+//                         UPDATE mridul.ProductionItems 
+//                         SET QtyCompleted = QtyCompleted + @addQty_${item.ItemID},
+//                             ItemStatus = CASE 
+//                                 WHEN (QtyCompleted + @addQty_${item.ItemID}) >= QtyRequired THEN 'Completed' 
+//                                 ELSE 'Pending' 
+//                             END
+//                         WHERE ItemID = @itemId_${item.ItemID}
+//                     `);
                     
-                // C. Update the Warehouse/Inventory (Add Finished Goods to ProductMaster)
-                await request
-                    .input('invProdId_' + item.ItemID, sql.Int, item.ProductID)
-                    .input('invQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
-                    .query(`
-                        UPDATE mridul.ProductMaster
-                        SET ClosingBalance = ISNULL(ClosingBalance, 0) + @invQty_${item.ItemID}
-                        WHERE ProductID = @invProdId_${item.ItemID}
-                    `);
-            }
+//                 // C. Update the Warehouse/Inventory (Add Finished Goods to ProductMaster)
+//                 await request
+//                     .input('invProdId_' + item.ItemID, sql.Int, item.ProductID)
+//                     .input('invQty_' + item.ItemID, sql.Decimal(18,2), item.QtyProduced)
+//                     .query(`
+//                         UPDATE mridul.ProductMaster
+//                         SET ClosingBalance = ISNULL(ClosingBalance, 0) + @invQty_${item.ItemID}
+//                         WHERE ProductID = @invProdId_${item.ItemID}
+//                     `);
+//             }
 
-            // D. Check if the entire Master Order is now completed
-            await request
-                .input('checkOrderId', sql.Int, OrderID)
-                .query(`
-                    UPDATE mridul.ProductionOrders
-                    SET Status = CASE 
-                        WHEN NOT EXISTS (SELECT 1 FROM mridul.ProductionItems WHERE OrderID = @checkOrderId AND ItemStatus = 'Pending') 
-                        THEN 'Completed' 
-                        ELSE 'Partial' 
-                    END
-                    WHERE OrderID = @checkOrderId
-                `);
+//             // D. Check if the entire Master Order is now completed
+//             await request
+//                 .input('checkOrderId', sql.Int, OrderID)
+//                 .query(`
+//                     UPDATE mridul.ProductionOrders
+//                     SET Status = CASE 
+//                         WHEN NOT EXISTS (SELECT 1 FROM mridul.ProductionItems WHERE OrderID = @checkOrderId AND ItemStatus = 'Pending') 
+//                         THEN 'Completed' 
+//                         ELSE 'Partial' 
+//                     END
+//                     WHERE OrderID = @checkOrderId
+//                 `);
 
-            await transaction.commit();
-            res.status(201).json({ message: 'Batch Generated', batchNo });
+//             await transaction.commit();
+//             res.status(201).json({ message: 'Batch Generated', batchNo });
             
-        } catch (txnErr) {
-            await transaction.rollback();
-            throw txnErr;
-        }
-    } catch (err) {
-        console.error("Batch creation failed:", err);
-        res.status(500).json({ error: 'Failed to generate batch' });
-    }
-});
+//         } catch (txnErr) {
+//             await transaction.rollback();
+//             throw txnErr;
+//         }
+//     } catch (err) {
+//         console.error("Batch creation failed:", err);
+//         res.status(500).json({ error: 'Failed to generate batch' });
+//     }
+// });
 
 // ==========================================
 // PRODUCT MASTER ROUTES
