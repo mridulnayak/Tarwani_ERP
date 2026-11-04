@@ -1122,13 +1122,18 @@ app.post('/api/production-orders', async (req, res) => {
 
 
 // BULLETPROOF PRODUCTION ORDER BATCH ROUTES
-app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req, res) => {
+app.get('/api/production/order/:id', async (req, res) => {
     try {
         const rawId = req.params.id;
         const orderId = parseInt(rawId.toString().replace(/\D/g, ''), 10);
         
+        if (isNaN(orderId)) {
+            return res.status(400).json({ error: "Invalid Order ID format." });
+        }
+
         const pool = await sql.connect(dbConfig);
 
+        // 1. Fetch exact order
         let orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
             .query(`
@@ -1145,7 +1150,7 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
                 WHERE po.ProductionOrderID = @orderId
             `);
 
-        // Fallback to latest if ID not matched
+        // 2. Fallback to latest if specific ID row is missing in this session
         if (orderResult.recordset.length === 0) {
             orderResult = await pool.request().query(`
                 SELECT TOP 1
@@ -1168,6 +1173,7 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
 
         const orderData = orderResult.recordset[0];
 
+        // 3. Safely calculate completed quantity from batches
         let qtyCompleted = 0;
         try {
             const batchResult = await pool.request()
@@ -1175,11 +1181,16 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
                 .query(`SELECT ISNULL(SUM(QtyProduced), 0) AS TotalCompleted FROM mridul.ProductionBatch WHERE OrderID = @orderId`);
             qtyCompleted = batchResult.recordset[0].TotalCompleted;
         } catch (batchErr) {
+            console.log("Batch table check skipped safely:", batchErr.message);
             qtyCompleted = 0;
         }
 
         res.status(200).json({
-            order: { OrderID: orderData.OrderID, OrderNo: orderData.OrderNo, Status: orderData.Status },
+            order: { 
+                OrderID: orderData.OrderID, 
+                OrderNo: orderData.OrderNo, 
+                Status: orderData.Status 
+            },
             items: [{
                 ItemID: orderData.OrderID, 
                 ProductID: orderData.ProductID,
@@ -1189,7 +1200,7 @@ app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req,
             }]
         });
     } catch (err) {
-        console.error('API Error:', err.message);
+        console.error('API Error in /api/production/order/:id:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
