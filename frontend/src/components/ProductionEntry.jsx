@@ -210,16 +210,19 @@ export default function ProductionEntry({ user }) {
         <div className="p-5 md:p-6">
           <div className="mb-6">
             <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Select Pending Production Order *</label>
-            <Select
-              options={orderOptions}
-              value={orderOptions.find(opt => opt.value === selectedOrderId) || null}
-              onChange={(selected) => handleOrderSelect(selected ? selected.value : '')}
-              isSearchable
-              isClearable
-              placeholder="Search by Order No or Product..."
-              className="w-full md:w-2/3 text-gray-900 text-sm"
-              classNamePrefix="erp-select"
-            />
+<Select
+  options={orderOptions}
+  value={orderOptions.find(opt => opt.value === selectedOrderId) || null}
+  onChange={(selected) => handleOrderSelect(selected ? selected.value : '')}
+  isSearchable
+  isClearable
+  placeholder="Search by Order No or Product..."
+  className="w-full md:w-2/3 text-gray-900 text-sm"
+  classNamePrefix="erp-select"
+  // Add these two lines to fix the hidden dropdown items:
+  menuPortalTarget={document.body} 
+  styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
+/>
           </div>
 
           {activeOrder && (
