@@ -1631,16 +1631,17 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// SALES ORDER ITEMS
+// SALES DISPATCH & OUTBOUND ROUTES (COMPLETE & FINAL)
 // ==========================================
-app.get('/api/sales-orders/:id/items', async (req, res) => {
+
+// 1. GET: Fetch Sales Order Items (V2 - Guaranteed to return ProductID)
+app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
     try {
         const soId = parseInt(req.params.id, 10);
-        if (isNaN(soId)) return res.status(400).json({ error: "Invalid ID" });
+        if (isNaN(soId)) return res.status(400).json({ error: "Invalid Sales Order ID" });
 
         const pool = await sql.connect(dbConfig);
         
-        // 🔥 FIX: Added d.ProductID so frontend knows exactly which item to dispatch
         const result = await pool.request()
             .input('soId', sql.Int, soId)
             .query(`
@@ -1656,19 +1657,16 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 
         return res.status(200).json(result.recordset || []);
     } catch (err) {
-        console.error('Error fetching items:', err);
+        console.error('Error fetching SO items v2:', err.message);
         return res.status(500).json({ error: 'Failed to fetch items' });
     }
 });
 
-// ==========================================
-// 2. GET DISPATCH HISTORY (FIXED: HTML/<doctype ERROR)
-// ==========================================
+// 2. GET: Fetch Dispatch History (Handles Plural/Singular & Prevents HTML Crash)
 app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         
-        // Ensure table exists to prevent SQL crash
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[SalesDispatch]'))
             BEGIN
@@ -1684,7 +1682,6 @@ app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
             END
         `);
 
-        // Fetch dispatches
         const result = await pool.request().query(`
             SELECT TOP 50 
                 d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
@@ -1697,11 +1694,93 @@ app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
         
         return res.status(200).json(result.recordset);
     } catch (err) {
-        console.error('Error fetching dispatches:', err);
+        console.error('Error fetching dispatches:', err.message);
         return res.status(500).json({ error: 'Failed to fetch dispatch records' });
     }
 });
 
+// 3. POST: Bulletproof Dispatch Creator (Validates Data & Deducts Inventory safely)
+app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
+    let transaction; 
+
+    try {
+        const soId = parseInt(req.body.soId || req.body.SO_ID || req.body.salesOrderId, 10);
+        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle || 'N/A';
+        const dispatchedBy = req.body.dispatchedBy || req.body.userName || req.body.loggedBy || 'System';
+        const rawItems = req.body.items || req.body.dispatchItems;
+
+        if (!soId || isNaN(soId)) {
+            return res.status(400).json({ error: "Valid Sales Order ID is required." });
+        }
+        if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
+            return res.status(400).json({ error: 'Dispatch items array is missing or empty.' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        transaction = new sql.Transaction(pool);
+        await transaction.begin();
+
+        for (const rawItem of rawItems) {
+            const productId = parseInt(rawItem.productId || rawItem.ProductID || rawItem.itemId, 10);
+            const quantity = parseInt(rawItem.quantity || rawItem.qty || rawItem.DispatchedQty, 10);
+
+            if (!productId || isNaN(productId) || !quantity || isNaN(quantity)) {
+                await transaction.rollback();
+                return res.status(400).json({ 
+                    error: `Invalid Item Data. ProductID or Quantity is missing/invalid. Received ProductID: ${rawItem.productId}, Qty: ${rawItem.quantity}` 
+                });
+            }
+
+            // A. Insert Dispatch Record
+            await new sql.Request(transaction)
+                .input('soId', sql.Int, soId)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
+                .input('vehicle', sql.VarChar, vehicleNumber)
+                .input('dispatchedBy', sql.VarChar, dispatchedBy)
+                .query(`
+                    INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
+                    VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
+                `);
+
+            // B. Deduct Stock safely
+            const stockResult = await new sql.Request(transaction)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
+                .query(`
+                    UPDATE mridul.ProductMaster 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
+                    OUTPUT INSERTED.ClosingBalance
+                    WHERE ProductID = @productId
+                `);
+
+            if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
+                await transaction.rollback();
+                return res.status(400).json({ error: `Insufficient stock for Product ID: ${productId}. Cannot dispatch.` });
+            }
+        }
+
+        // C. Update Sales Order Status
+        await new sql.Request(transaction)
+            .input('soId', sql.Int, soId)
+            .query(`
+                UPDATE mridul.SalesOrderHeader 
+                SET Status = 'Dispatched' 
+                WHERE SO_ID = @soId
+            `);
+
+        await transaction.commit(); 
+        return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
+
+    } catch (err) {
+        console.error('SQL CRASH TRACE:', err.message);
+        if (transaction) {
+            try { await transaction.rollback(); } catch (rollbackErr) { }
+        }
+        return res.status(500).json({ error: `Database Error: ${err.message}` });
+    }
+});
 // --- SERVE STATIC FRONTEND ASSETS ---
 const frontendDistPath = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendDistPath));

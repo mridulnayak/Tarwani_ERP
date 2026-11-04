@@ -26,21 +26,18 @@ export default function SalesDispatch({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       
-      // Fetch Approved/Pending Sales Orders
       const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
         headers: { 'x-access-token': token }
       });
       const soData = soRes.ok ? await soRes.json() : [];
       setSalesOrders(Array.isArray(soData) ? soData : []);
 
-      // Fetch Employees for "Received By" dropdown
       const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
         headers: { 'x-access-token': token }
       });
       const partyData = partyRes.ok ? await partyRes.json() : [];
       setEmployees(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Employee') : []);
 
-      // Fetch Existing Dispatches
       const dispRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
         headers: { 'x-access-token': token }
       });
@@ -53,7 +50,7 @@ export default function SalesDispatch({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-const handleSalesOrderChange = async (soId) => {
+  const handleSalesOrderChange = async (soId) => {
     setSelectedSoId(soId);
     setDispatchItems([]);
     if (!soId) {
@@ -63,22 +60,22 @@ const handleSalesOrderChange = async (soId) => {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/items`, {
+      // Hits the unique V2 route to guarantee we receive ProductID
+      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/dispatch-items-v2`, {
         headers: { 'x-access-token': token }
       });
       
       const data = res.ok ? await res.json() : [];
-      console.log("🔥 FETCHED SO ITEMS FROM API:", data); // Check F12 Console with this
-      
       setSoItemsList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SO items:", err);
       setSoItemsList([]);
     }
   };
+
   const soOptions = salesOrders.map(so => ({
     value: String(so.SO_ID || so.SalesOrderID),
-    label: `${so.SONumber} - ${so.CustomerName || 'Customer'}` // ✅ Removed the stray '-' sign
+    label: `${so.SONumber} - ${so.CustomerName || 'Customer'}`
   }));
 
   const employeeOptions = employees.map(emp => ({
@@ -86,23 +83,21 @@ const handleSalesOrderChange = async (soId) => {
     label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
   }));
 
-// 🚨 FOOLPROOF PRODUCT OPTIONS MAPPING
+  // Foolproof mapping that strips undefined data automatically
   const productOptions = (soItemsList || []).map((item, index) => {
-    // Check F12 console to see exactly what columns came from the database!
-    const pId = item.ProductID || item.productId || item.ItemID || item.id;
+    const pId = item.ProductID || item.productId || item.id || item.ItemID;
     const pName = item.ProductName || item.productName || item.ItemName || 'Unknown Product';
     const qty = item.Quantity || item.quantity || item.Qty || item.OrderedQty || 0;
 
     return {
-      // If pId is undefined, mark it explicitly so we can catch it
       value: pId !== undefined && pId !== null ? String(pId) : `MISSING_ID_${index}`,
       label: `${pName} (Ordered: ${qty})`
     };
-  });
+  }).filter(opt => !opt.value.startsWith('MISSING_ID'));
 
   const handleAddDispatchItem = () => {
-    if (!currentProduct.productId || currentProduct.productId.startsWith('MISSING_ID')) {
-      return alert("Technical Error: The database did not return a valid Product ID for this item. Please check your backend SQL query for SO Items.");
+    if (!currentProduct.productId) {
+      return alert("Please select a product from the order items.");
     }
     if (currentProduct.quantity <= 0) {
       return alert("Quantity must be greater than zero.");
@@ -116,7 +111,7 @@ const handleSalesOrderChange = async (soId) => {
     setDispatchItems(dispatchItems.filter((_, i) => i !== index));
   };
 
-const handleSubmitDispatch = async (e) => {
+  const handleSubmitDispatch = async (e) => {
     e.preventDefault();
     if (!selectedSoId) return alert("Please select a Sales Order.");
     if (!receivedById) return alert("Please select who received the delivery ('Received By').");
@@ -125,11 +120,10 @@ const handleSubmitDispatch = async (e) => {
     try {
       const token = localStorage.getItem('erp_token');
       
-      // Make sure we are sending exact keys backend expects
       const payload = { 
-        soId: parseInt(selectedSoId, 10), // Ensure it's a number
-        dispatchedBy: receivedById,       // Backend expects 'dispatchedBy'
-        vehicleNumber: vehicleNo,         // Backend expects 'vehicleNumber'
+        soId: parseInt(selectedSoId, 10), 
+        dispatchedBy: receivedById,       
+        vehicleNumber: vehicleNo,         
         remarks: remarks, 
         items: dispatchItems.map(item => ({
              productId: parseInt(item.productId, 10), 
@@ -146,7 +140,7 @@ const handleSubmitDispatch = async (e) => {
         body: JSON.stringify(payload)
       });
 
-      const data = await res.json(); // ALWAYS parse the response first
+      const data = await res.json();
 
       if (res.ok) {
         setSelectedSoId('');
@@ -159,7 +153,6 @@ const handleSubmitDispatch = async (e) => {
         fetchData();
         alert("Daily Dispatch entry recorded successfully!");
       } else {
-        // Now you will see exactly WHY it threw a 400 error!
         alert(`Failed to save dispatch entry: ${data.error || 'Check server logs.'}`);
       }
     } catch (error) {
@@ -176,7 +169,6 @@ const handleSubmitDispatch = async (e) => {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER WITH TOGGLE BUTTONS */}
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Daily Dispatch Management</h2>
@@ -204,7 +196,6 @@ const handleSubmitDispatch = async (e) => {
         </div>
       </div>
 
-      {/* VIEW MODE: LIST */}
       {viewMode === 'list' && (
         <div>
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
@@ -248,7 +239,6 @@ const handleSubmitDispatch = async (e) => {
         </div>
       )}
 
-      {/* VIEW MODE: CREATE FORM */}
       {viewMode === 'create' && (
         <form onSubmit={handleSubmitDispatch} className="p-5 md:p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -303,7 +293,6 @@ const handleSubmitDispatch = async (e) => {
             </div>
           </div>
 
-          {/* Sequential Item Loading Box */}
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
             <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Load Items for Delivery (Sequential)</h4>
             
@@ -343,7 +332,6 @@ const handleSubmitDispatch = async (e) => {
               </div>
             </div>
 
-            {/* Loaded Items Table */}
             <div className="overflow-x-auto bg-white rounded border border-gray-200">
               <table className="w-full text-left text-xs text-gray-700">
                 <thead className="bg-gray-100 uppercase border-b">
