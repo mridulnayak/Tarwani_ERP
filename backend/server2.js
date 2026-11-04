@@ -1220,45 +1220,26 @@ app.get('/api/production/batches', async (req, res) => {
     }
 });
 
-// DIAGNOSTIC POST: Create New Batch with Full Error Traceback
+// ==========================================
+// ROBUST BATCH CREATION ROUTE (SERVER2.JS)
+// ==========================================
 app.post('/api/production/batch/create', async (req, res) => {
     try {
-        console.log("=== INCOMING BATCH PAYLOAD ===", JSON.stringify(req.body));
-        
         const { OrderID, items } = req.body;
         
         if (!OrderID) {
-            return res.status(400).json({ error: "Missing OrderID in request body." });
+            return res.status(400).json({ error: "Missing OrderID." });
         }
         if (!items || !Array.isArray(items) || items.length === 0) {
-            return res.status(400).json({ error: "Items array is missing or empty." });
+            return res.status(400).json({ error: "No items provided for batch." });
         }
 
         const pool = await sql.connect(dbConfig);
-        
-        // Ensure table exists
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[ProductionBatch]'))
-            BEGIN
-                CREATE TABLE mridul.ProductionBatch (
-                    BatchID INT IDENTITY(1,1) PRIMARY KEY,
-                    BatchNo VARCHAR(50),
-                    OrderID INT,
-                    ProductID INT,
-                    QtyProduced FLOAT,
-                    ProductionDate DATETIME DEFAULT GETDATE()
-                )
-            END
-        `);
-
-        const transaction = new sql.Transaction(pool);
-        await transaction.begin();
-        
         const batchNo = `BTH-${Date.now()}`;
 
+        // Direct insert for each item without complex transaction wrapping if it causes locks
         for (const item of items) {
-            console.l
-            await new sql.Request(transaction)
+            await pool.request()
                 .input('batchNo', sql.VarChar, batchNo)
                 .input('orderId', sql.Int, OrderID)
                 .input('productId', sql.Int, item.ProductID)
@@ -1269,16 +1250,10 @@ app.post('/api/production/batch/create', async (req, res) => {
                 `);
         }
 
-        await transaction.commit();
         return res.status(201).json({ message: "Batch Generated Successfully", batchNo });
     } catch (err) {
-        console.error('=== CRITICAL BATCH CREATION ERROR ===', err);
-        // Return exact error message to frontend for debugging
-        return res.status(500).json({ 
-            error: err.message, 
-            code: err.code,
-            details: "Check server console for detailed traceback." 
-        });
+        console.error('CRITICAL ERROR IN /api/production/batch/create:', err);
+        return res.status(500).json({ error: err.message || "Internal Server Error during batch creation" });
     }
 });
 
