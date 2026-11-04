@@ -74,7 +74,7 @@ export default function ProductionEntry({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/order/${orderId}`, {
-        headers: { 'x-access-token': token }
+      headers: { 'x-access-token': token }
       });
       
       const contentType = res.headers.get("content-type");

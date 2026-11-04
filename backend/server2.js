@@ -1120,8 +1120,9 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// Corrected Route 
-app.get('/api/production/order/:id', async (req, res) => {
+
+// BULLETPROOF PRODUCTION ORDER BATCH ROUTES
+app.get(['/api/production/order/:id', '/api/production-orders/:id'], async (req, res) => {
     try {
         const rawId = req.params.id;
         const orderId = parseInt(rawId.toString().replace(/\D/g, ''), 10);
@@ -1144,6 +1145,7 @@ app.get('/api/production/order/:id', async (req, res) => {
                 WHERE po.ProductionOrderID = @orderId
             `);
 
+        // Fallback to latest if ID not matched
         if (orderResult.recordset.length === 0) {
             orderResult = await pool.request().query(`
                 SELECT TOP 1
@@ -1161,7 +1163,7 @@ app.get('/api/production/order/:id', async (req, res) => {
         }
 
         if (orderResult.recordset.length === 0) {
-            return res.status(404).json({ error: "No production orders found in database." });
+            return res.status(404).json({ error: "Order not found." });
         }
 
         const orderData = orderResult.recordset[0];
@@ -1173,7 +1175,7 @@ app.get('/api/production/order/:id', async (req, res) => {
                 .query(`SELECT ISNULL(SUM(QtyProduced), 0) AS TotalCompleted FROM mridul.ProductionBatch WHERE OrderID = @orderId`);
             qtyCompleted = batchResult.recordset[0].TotalCompleted;
         } catch (batchErr) {
-            console.log("Batch table check skipped:", batchErr.message);
+            qtyCompleted = 0;
         }
 
         res.status(200).json({
@@ -1187,7 +1189,7 @@ app.get('/api/production/order/:id', async (req, res) => {
             }]
         });
     } catch (err) {
-        console.error('API Error /api/production/order/:id:', err.message);
+        console.error('API Error:', err.message);
         res.status(500).json({ error: err.message });
     }
 });
