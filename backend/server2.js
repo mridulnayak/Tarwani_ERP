@@ -1631,19 +1631,28 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// SALES DISPATCH & OUTBOUND ROUTES (DUAL ROUTE SUPPORT)
+// ROBUST SALES DISPATCH POST ROUTE WITH PAYLOAD NORMALIZER
 // ==========================================
 app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
-    const { soId, vehicleNumber, dispatchedBy, items } = req.body;
-
-    if (!soId || !items || items.length === 0) {
-        return res.status(400).json({ error: 'Sales Order and dispatch items are required' });
-    }
-
-    const pool = await sql.connect(dbConfig);
-    
-    // Ensure dispatch table exists dynamically
     try {
+        console.log("=== INCOMING SALES DISPATCH PAYLOAD ===", JSON.stringify(req.body));
+
+        // Flexible destructuring to catch any variation of key names from frontend
+        const soId = req.body.soId || req.body.SO_ID || req.body.salesOrderId;
+        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle;
+        const dispatchedBy = req.body.dispatchedBy || req.body.userName || req.body.loggedBy || 'System';
+        const rawItems = req.body.items || req.body.dispatchItems || [];
+
+        if (!soId) {
+            return res.status(400).json({ error: 'Sales Order ID (soId) is required.' });
+        }
+        if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
+            return res.status(400).json({ error: 'Dispatch items array is required.' });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Ensure SalesDispatch table exists
         await pool.request().query(`
             IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[SalesDispatch]'))
             BEGIN
@@ -1658,49 +1667,48 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
                 )
             END
         `);
-    } catch (tableErr) {
-        console.error('SalesDispatch Table Creation Warning:', tableErr.message);
-    }
 
-    const transaction = new sql.Transaction(pool);
-
-    try {
+        const transaction = new sql.Transaction(pool);
         await transaction.begin();
 
-        for (const item of items) {
+        for (const rawItem of rawItems) {
+            const productId = rawItem.productId || rawItem.ProductID || rawItem.itemId;
+            const quantity = rawItem.quantity || rawItem.qty || rawItem.DispatchedQty;
+
+            if (!productId || !quantity) {
+                throw new Error(`Invalid item structure: productId and quantity are required.`);
+            }
+
             // A. Log the dispatch record
-            const dispatchReq = new sql.Request(transaction);
-            await dispatchReq
+            await new sql.Request(transaction)
                 .input('soId', sql.Int, soId)
-                .input('productId', sql.Int, item.productId)
-                .input('qty', sql.Int, item.quantity)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
                 .input('vehicle', sql.VarChar, vehicleNumber || null)
-                .input('dispatchedBy', sql.VarChar, dispatchedBy || 'System')
+                .input('dispatchedBy', sql.VarChar, dispatchedBy)
                 .query(`
                     INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
                     VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
                 `);
 
-            // B. Deduct Stock WITH a check to prevent negative inventory
-            const stockReq = new sql.Request(transaction);
-            const stockResult = await stockReq
-                .input('productId', sql.Int, item.productId)
-                .input('qty', sql.Int, item.quantity)
+            // B. Deduct Stock with negative inventory check
+            const stockResult = await new sql.Request(transaction)
+                .input('productId', sql.Int, productId)
+                .input('qty', sql.Int, quantity)
                 .query(`
                     UPDATE mridul.ProductMaster 
-                    SET ClosingBalance = ClosingBalance - @qty 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
                     OUTPUT INSERTED.ClosingBalance
                     WHERE ProductID = @productId
                 `);
 
             if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
-                throw new Error(`Insufficient stock for Product ID: ${item.productId}`);
+                throw new Error(`Insufficient stock for Product ID: ${productId}`);
             }
         }
 
-        // C. Mark the Sales Order as Dispatched
-        const statusReq = new sql.Request(transaction);
-        await statusReq
+        // C. Mark Sales Order as Dispatched
+        await new sql.Request(transaction)
             .input('soId', sql.Int, soId)
             .query(`
                 UPDATE mridul.SalesOrderHeader 
@@ -1712,52 +1720,8 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
         return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
 
     } catch (err) {
-        try {
-            await transaction.rollback();
-        } catch (rollbackErr) {
-            console.error('Rollback failed:', rollbackErr);
-        }
-        
-        console.error('Dispatch Transaction Failed:', err.message || err);
-        
-        if (err.message && err.message.includes('Insufficient stock')) {
-            return res.status(400).json({ error: err.message });
-        }
-        
+        console.error('Dispatch Error Traceback:', err);
         return res.status(500).json({ error: err.message || 'Failed to process sales dispatch' });
-    }
-});
-
-// GET dispatch history with plural/singular support
-app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
-    try {
-        const { month, year } = req.query;
-
-        if (!month || !year) {
-            return res.status(200).json([]);
-        }
-
-        const pool = await sql.connect(dbConfig);
-        const request = pool.request();
-        
-        const result = await request
-            .input('month', sql.Int, month)
-            .input('year', sql.Int, year)
-            .query(`
-                SELECT 
-                    d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
-                    so.SONumber, p.ProductName
-                FROM mridul.SalesDispatch d
-                INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
-                INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
-                WHERE MONTH(d.DispatchDate) = @month AND YEAR(d.DispatchDate) = @year
-                ORDER BY d.DispatchDate DESC
-            `);
-            
-        return res.status(200).json(result.recordset);
-    } catch (err) {
-        console.error('Error fetching dispatches:', err);
-        return res.status(500).json({ error: err.message || 'Failed to fetch dispatch records' });
     }
 });
 
