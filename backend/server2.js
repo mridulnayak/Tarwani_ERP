@@ -1631,10 +1631,9 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// SALES DISPATCH & OUTBOUND ROUTES
+// SALES DISPATCH & OUTBOUND ROUTES (DUAL ROUTE SUPPORT)
 // ==========================================
-// 1. POST: Process Outbound Dispatch and Deduct Finished Stock
-app.post('/api/sales-dispatch', async (req, res) => {
+app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     const { soId, vehicleNumber, dispatchedBy, items } = req.body;
 
     if (!soId || !items || items.length === 0) {
@@ -1642,6 +1641,27 @@ app.post('/api/sales-dispatch', async (req, res) => {
     }
 
     const pool = await sql.connect(dbConfig);
+    
+    // Ensure dispatch table exists dynamically
+    try {
+        await pool.request().query(`
+            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[SalesDispatch]'))
+            BEGIN
+                CREATE TABLE mridul.SalesDispatch (
+                    DispatchID INT IDENTITY(1,1) PRIMARY KEY,
+                    SO_ID INT NOT NULL,
+                    ProductID INT NOT NULL,
+                    DispatchedQty INT NOT NULL,
+                    VehicleNumber VARCHAR(50),
+                    DispatchedBy VARCHAR(100),
+                    DispatchDate DATETIME DEFAULT GETDATE()
+                )
+            END
+        `);
+    } catch (tableErr) {
+        console.error('SalesDispatch Table Creation Warning:', tableErr.message);
+    }
+
     const transaction = new sql.Transaction(pool);
 
     try {
@@ -1655,7 +1675,7 @@ app.post('/api/sales-dispatch', async (req, res) => {
                 .input('productId', sql.Int, item.productId)
                 .input('qty', sql.Int, item.quantity)
                 .input('vehicle', sql.VarChar, vehicleNumber || null)
-                .input('dispatchedBy', sql.VarChar, dispatchedBy)
+                .input('dispatchedBy', sql.VarChar, dispatchedBy || 'System')
                 .query(`
                     INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
                     VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
@@ -1673,7 +1693,6 @@ app.post('/api/sales-dispatch', async (req, res) => {
                     WHERE ProductID = @productId
                 `);
 
-            // Check if the resulting stock went negative (If DB doesn't have a CHECK constraint)
             if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
                 throw new Error(`Insufficient stock for Product ID: ${item.productId}`);
             }
@@ -1690,10 +1709,9 @@ app.post('/api/sales-dispatch', async (req, res) => {
             `);
 
         await transaction.commit(); 
-        res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
+        return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
 
     } catch (err) {
-        // Safely rollback the transaction if it's active
         try {
             await transaction.rollback();
         } catch (rollbackErr) {
@@ -1702,20 +1720,19 @@ app.post('/api/sales-dispatch', async (req, res) => {
         
         console.error('Dispatch Transaction Failed:', err.message || err);
         
-        // Return a friendly error to the frontend if it was a stock issue
         if (err.message && err.message.includes('Insufficient stock')) {
             return res.status(400).json({ error: err.message });
         }
         
-        res.status(500).json({ error: 'Failed to process sales dispatch' });
+        return res.status(500).json({ error: err.message || 'Failed to process sales dispatch' });
     }
 });
-// 2. GET: Fetch Dispatch History (Month-wise)
-app.get('/api/sales-dispatch', async (req, res) => {
+
+// GET dispatch history with plural/singular support
+app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         const { month, year } = req.query;
 
-        // If no month/year is requested, return an empty array (hidden by default)
         if (!month || !year) {
             return res.status(200).json([]);
         }
@@ -1737,13 +1754,12 @@ app.get('/api/sales-dispatch', async (req, res) => {
                 ORDER BY d.DispatchDate DESC
             `);
             
-        res.status(200).json(result.recordset);
+        return res.status(200).json(result.recordset);
     } catch (err) {
         console.error('Error fetching dispatches:', err);
-        res.status(500).json({ error: 'Failed to fetch dispatch records' });
+        return res.status(500).json({ error: err.message || 'Failed to fetch dispatch records' });
     }
 });
-
 
 
 // --- SERVE STATIC FRONTEND ASSETS ---
