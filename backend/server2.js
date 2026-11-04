@@ -1634,6 +1634,9 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 // SALES DISPATCH & OUTBOUND ROUTES (COMPLETE & FINAL)
 // ==========================================
 
+// ==========================================
+// 1. GET: Fetch Sales Order Items (V2 - Corrected Table Name)
+// ==========================================
 app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
     try {
         const soId = parseInt(req.params.id, 10);
@@ -1641,17 +1644,16 @@ app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
+        // Fixed table name to mridul.SalesOrderDetails
         const result = await pool.request()
             .input('soId', sql.Int, soId)
             .query(`
                 SELECT 
-                    -- Update this if your column is named ItemID instead of ProductID
                     d.ProductID, 
                     ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
                     ISNULL(d.Quantity, 0) AS Quantity,
                     ISNULL(d.Rate, 0) AS Rate
-                -- REPLACE 'SalesOrderDetail' WITH YOUR ACTUAL TABLE NAME
-                FROM mridul.YOUR_ACTUAL_TABLE_NAME d
+                FROM mridul.SalesOrderDetails d
                 LEFT JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
                 WHERE d.SO_ID = @soId
             `);
