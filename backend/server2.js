@@ -1631,23 +1631,23 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 });
 
 // ==========================================
-// ROBUST SALES DISPATCH POST ROUTE WITH PAYLOAD NORMALIZER
+// BULLETPROOF SALES DISPATCH POST ROUTE
 // ==========================================
 app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         console.log("=== INCOMING SALES DISPATCH PAYLOAD ===", JSON.stringify(req.body));
 
-        // Flexible destructuring to catch any variation of key names from frontend
-        const soId = req.body.soId || req.body.SO_ID || req.body.salesOrderId;
-        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle;
+        // Strict integer parsing to prevent SQL type errors
+        const soId = parseInt(req.body.soId || req.body.SO_ID || req.body.salesOrderId, 10);
+        const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle || '';
         const dispatchedBy = req.body.dispatchedBy || req.body.userName || req.body.loggedBy || 'System';
-        const rawItems = req.body.items || req.body.dispatchItems || [];
+        const rawItems = req.body.items || req.body.dispatchItems;
 
-        if (!soId) {
-            return res.status(400).json({ error: 'Sales Order ID (soId) is required.' });
+        if (!soId || isNaN(soId)) {
+            return res.status(400).json({ error: 'Valid Sales Order ID is required.' });
         }
         if (!rawItems || !Array.isArray(rawItems) || rawItems.length === 0) {
-            return res.status(400).json({ error: 'Dispatch items array is required.' });
+            return res.status(400).json({ error: 'Dispatch items array is missing or empty.' });
         }
 
         const pool = await sql.connect(dbConfig);
@@ -1671,57 +1671,66 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
         const transaction = new sql.Transaction(pool);
         await transaction.begin();
 
-        for (const rawItem of rawItems) {
-            const productId = rawItem.productId || rawItem.ProductID || rawItem.itemId;
-            const quantity = rawItem.quantity || rawItem.qty || rawItem.DispatchedQty;
+        try {
+            for (const rawItem of rawItems) {
+                // Strict type conversion for SQL inputs
+                const productId = parseInt(rawItem.productId || rawItem.ProductID || rawItem.itemId, 10);
+                const quantity = parseInt(rawItem.quantity || rawItem.qty || rawItem.DispatchedQty, 10);
 
-            if (!productId || !quantity) {
-                throw new Error(`Invalid item structure: productId and quantity are required.`);
+                if (!productId || isNaN(productId) || !quantity || isNaN(quantity)) {
+                    throw new Error(`Invalid item structure: Product ID and Quantity must be valid numbers.`);
+                }
+
+                // A. Log the dispatch record
+                await new sql.Request(transaction)
+                    .input('soId', sql.Int, soId)
+                    .input('productId', sql.Int, productId)
+                    .input('qty', sql.Int, quantity)
+                    .input('vehicle', sql.VarChar, vehicleNumber)
+                    .input('dispatchedBy', sql.VarChar, dispatchedBy)
+                    .query(`
+                        INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
+                        VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
+                    `);
+
+                // B. Deduct Stock safely
+                const stockResult = await new sql.Request(transaction)
+                    .input('productId', sql.Int, productId)
+                    .input('qty', sql.Int, quantity)
+                    .query(`
+                        UPDATE mridul.ProductMaster 
+                        SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
+                        OUTPUT INSERTED.ClosingBalance
+                        WHERE ProductID = @productId
+                    `);
+
+                if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
+                    throw new Error(`Insufficient stock for Product ID: ${productId}`);
+                }
             }
 
-            // A. Log the dispatch record
+            // C. Mark Sales Order as Dispatched
             await new sql.Request(transaction)
                 .input('soId', sql.Int, soId)
-                .input('productId', sql.Int, productId)
-                .input('qty', sql.Int, quantity)
-                .input('vehicle', sql.VarChar, vehicleNumber || null)
-                .input('dispatchedBy', sql.VarChar, dispatchedBy)
                 .query(`
-                    INSERT INTO mridul.SalesDispatch (SO_ID, ProductID, DispatchedQty, VehicleNumber, DispatchedBy)
-                    VALUES (@soId, @productId, @qty, @vehicle, @dispatchedBy)
+                    UPDATE mridul.SalesOrderHeader 
+                    SET Status = 'Dispatched' 
+                    WHERE SO_ID = @soId
                 `);
 
-            // B. Deduct Stock with negative inventory check
-            const stockResult = await new sql.Request(transaction)
-                .input('productId', sql.Int, productId)
-                .input('qty', sql.Int, quantity)
-                .query(`
-                    UPDATE mridul.ProductMaster 
-                    SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty 
-                    OUTPUT INSERTED.ClosingBalance
-                    WHERE ProductID = @productId
-                `);
+            await transaction.commit(); 
+            return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
 
-            if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
-                throw new Error(`Insufficient stock for Product ID: ${productId}`);
-            }
+        } catch (txErr) {
+            // Isolate transaction rollback from general server errors
+            await transaction.rollback();
+            throw txErr; 
         }
 
-        // C. Mark Sales Order as Dispatched
-        await new sql.Request(transaction)
-            .input('soId', sql.Int, soId)
-            .query(`
-                UPDATE mridul.SalesOrderHeader 
-                SET Status = 'Dispatched' 
-                WHERE SO_ID = @soId
-            `);
-
-        await transaction.commit(); 
-        return res.status(201).json({ message: 'Goods dispatched and inventory deducted successfully!' });
-
     } catch (err) {
-        console.error('Dispatch Error Traceback:', err);
-        return res.status(500).json({ error: err.message || 'Failed to process sales dispatch' });
+        console.error('🔥 DISPATCH 500 CRASH TRACE:', err);
+        // This will now send the exact SQL complaint back to your network tab/frontend alert
+        return res.status(500).json({ error: err.message || 'Internal Server Error during dispatch.' });
     }
 });
 
