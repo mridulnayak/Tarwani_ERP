@@ -168,10 +168,20 @@ const handleSalesOrderChange = async (soId) => {
     }
   };
 
-  const filteredDispatches = (dispatches || []).filter(d => 
-    (d.DispatchNo && d.DispatchNo.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (d.CustomerName && d.CustomerName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+// 🚨 FIXED FILTER LOGIC: Uses actual backend columns and defaults to true if search is empty
+  const filteredDispatches = (dispatches || []).filter(d => {
+    if (!searchTerm) return true; // Shows all records immediately when search is empty
+    
+    const term = searchTerm.toLowerCase();
+    
+    // Safely check against the exact keys returned by the backend
+    const matchID = d.DispatchID && String(d.DispatchID).includes(term);
+    const matchSO = d.SONumber && String(d.SONumber).toLowerCase().includes(term);
+    const matchVehicle = d.VehicleNumber && String(d.VehicleNumber).toLowerCase().includes(term);
+    const matchUser = d.DispatchedBy && String(d.DispatchedBy).toLowerCase().includes(term);
+    
+    return matchID || matchSO || matchVehicle || matchUser;
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
