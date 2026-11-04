@@ -1299,7 +1299,7 @@ app.get('/api/finished-goods', async (req, res) => {
     }
 });
 
-// 7. POST: Log Finished Goods (With Auto-Column Patching)
+// POST: Log Finished Goods with Smart Status Check (Partial vs Completed)
 app.post('/api/finished-goods', async (req, res) => {
     const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
@@ -1308,49 +1308,28 @@ app.post('/api/finished-goods', async (req, res) => {
     }
 
     const pool = await sql.connect(dbConfig);
-
-    try {
-        // Ensure table and all required columns exist safely
-        await pool.request().query(`
-            IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]'))
-            BEGIN
-                CREATE TABLE mridul.FinishedGoodsReceipt (
-                    ReceiptID INT IDENTITY(1,1) PRIMARY KEY,
-                    ReceiptNo VARCHAR(50),
-                    ProductionOrderID INT,
-                    ProductID INT,
-                    ProducedQuantity FLOAT,
-                    WastageQuantity FLOAT,
-                    LoggedBy VARCHAR(100),
-                    ReceiptDate DATETIME DEFAULT GETDATE()
-                )
-            END
-            
-            -- Auto-add ReceiptNo column if missing from older table schema
-            IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[mridul].[FinishedGoodsReceipt]') AND name = 'ReceiptNo')
-            BEGIN
-                ALTER TABLE mridul.FinishedGoodsReceipt ADD ReceiptNo VARCHAR(50);
-            END
-        `);
-    } catch (schemaErr) {
-        console.error('Schema check warning:', schemaErr.message);
-    }
-
     const transaction = new sql.Transaction(pool);
 
     try {
         await transaction.begin(); 
         const receiptNo = `FGR-${Date.now()}`;
 
-        const poReq = new sql.Request(transaction);
-        await poReq
+        // 1. Get Target Quantity and current completed quantity for this order
+        const orderCheck = await new sql.Request(transaction)
             .input('poId', sql.Int, productionOrderId)
             .query(`
-                UPDATE mridul.ProductionOrder
-                SET Status = 'Completed'
+                SELECT TargetQuantity, ISNULL(Status, 'Pending') as Status 
+                FROM mridul.ProductionOrder 
                 WHERE ProductionOrderID = @poId
             `);
 
+        if (orderCheck.recordset.length === 0) {
+            throw new Error('Production Order not found.');
+        }
+
+        const targetQty = orderCheck.recordset[0].TargetQuantity;
+
+        // 2. Insert Finished Goods Receipt
         await new sql.Request(transaction)
             .input('receiptNo', sql.VarChar, receiptNo)
             .input('poId', sql.Int, productionOrderId)
@@ -1363,6 +1342,7 @@ app.post('/api/finished-goods', async (req, res) => {
                 VALUES (@receiptNo, @poId, @productId, @produced, @wastage, @loggedBy)
             `);
 
+        // 3. Update Product Master Closing Balance
         await new sql.Request(transaction)
             .input('productId', sql.Int, productId)
             .input('qty', sql.Float, producedQty)
@@ -1372,8 +1352,34 @@ app.post('/api/finished-goods', async (req, res) => {
                 WHERE ProductID = @productId
             `);
 
+        // 4. Calculate total produced so far for this order
+        const sumResult = await new sql.Request(transaction)
+            .input('poId', sql.Int, productionOrderId)
+            .query(`
+                SELECT ISNULL(SUM(ProducedQuantity), 0) as TotalProduced 
+                FROM mridul.FinishedGoodsReceipt 
+                WHERE ProductionOrderID = @poId
+            `);
+
+        const totalProducedSoFar = sumResult.recordset[0].TotalProduced;
+
+        // 5. Update Order Status only if total produced >= target quantity
+        let newStatus = 'Pending';
+        if (totalProducedSoFar >= targetQty) {
+            newStatus = 'Completed';
+        }
+
+        await new sql.Request(transaction)
+            .input('poId', sql.Int, productionOrderId)
+            .input('status', sql.VarChar, newStatus)
+            .query(`
+                UPDATE mridul.ProductionOrder
+                SET Status = @status
+                WHERE ProductionOrderID = @poId
+            `);
+
         await transaction.commit(); 
-        res.status(201).json({ message: 'Success', receiptNo });
+        res.status(201).json({ message: 'Success', receiptNo, orderStatus: newStatus });
     } catch (err) {
         try { await transaction.rollback(); } catch (rollbackErr) {}
         console.error('Finished Goods Transaction Failed:', err.message);
