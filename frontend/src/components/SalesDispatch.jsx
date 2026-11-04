@@ -50,7 +50,7 @@ export default function SalesDispatch({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-  const handleSalesOrderChange = async (soId) => {
+const handleSalesOrderChange = async (soId) => {
     setSelectedSoId(soId);
     setDispatchItems([]);
     if (!soId) {
@@ -60,12 +60,19 @@ export default function SalesDispatch({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      // Hits the unique V2 route to guarantee we receive ProductID
       const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/dispatch-items-v2`, {
         headers: { 'x-access-token': token }
       });
       
-      const data = res.ok ? await res.json() : [];
+      const data = await res.json();
+
+      // 🚨 AGAR BACKEND CRASH HUA TOH EXACT ERROR SCREEN PAR AAYEGA 🚨
+      if (!res.ok) {
+          alert(`Backend Error: ${data.error}`);
+          return;
+      }
+
+      console.log("🔥 FETCHED SO ITEMS:", data); 
       setSoItemsList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SO items:", err);

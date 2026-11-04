@@ -1634,7 +1634,6 @@ app.get('/api/sales-orders/:id/items', async (req, res) => {
 // SALES DISPATCH & OUTBOUND ROUTES (COMPLETE & FINAL)
 // ==========================================
 
-// 1. GET: Fetch Sales Order Items (V2 - Guaranteed to return ProductID)
 app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
     try {
         const soId = parseInt(req.params.id, 10);
@@ -1657,8 +1656,9 @@ app.get('/api/sales-orders/:id/dispatch-items-v2', async (req, res) => {
 
         return res.status(200).json(result.recordset || []);
     } catch (err) {
-        console.error('Error fetching SO items v2:', err.message);
-        return res.status(500).json({ error: 'Failed to fetch items' });
+        console.error('🔥 SQL CRASH IN V2 ROUTE:', err.message);
+        // 🚨 YAHAN SE EXACT ERROR FRONTEND PAR JAYEGA 🚨
+        return res.status(500).json({ error: `Database Crash: ${err.message}` });
     }
 });
 
