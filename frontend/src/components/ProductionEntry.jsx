@@ -102,7 +102,7 @@ export default function ProductionEntry({ user }) {
     setProductionInputs(prev => ({ ...prev, [itemId]: value }));
   };
 
-  const handleGenerateBatch = async () => {
+const handleGenerateBatch = async () => {
     const batchItems = pendingItems.map(item => ({
       ItemID: item.ItemID,
       ProductID: item.ProductID,
@@ -129,15 +129,19 @@ export default function ProductionEntry({ user }) {
         body: JSON.stringify({ OrderID: activeOrder.OrderID, items: batchItems })
       });
 
+      const data = await res.json();
+
       if (res.ok) {
         alert("Batch Generated Successfully!");
         handleOrderSelect(selectedOrderId);
         fetchData();
       } else {
-        alert("Failed to generate batch.");
+        // Yeh line ab backend ka asli error message turant screen par dikha degi!
+        alert(`Failed to generate batch: ${data.error || 'Unknown server error'}`);
       }
     } catch (error) {
       console.error("Error generating batch:", error);
+      alert(`Network/Client Error: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
