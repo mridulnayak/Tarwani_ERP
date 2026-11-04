@@ -1120,15 +1120,14 @@ app.post('/api/production-orders', async (req, res) => {
     }
 });
 
-// 3. GET: 
-aapp.get('/api/production/order/:id', async (req, res) => {
+// Corrected Route 
+app.get('/api/production/order/:id', async (req, res) => {
     try {
         const rawId = req.params.id;
         const orderId = parseInt(rawId.toString().replace(/\D/g, ''), 10);
         
         const pool = await sql.connect(dbConfig);
 
-        // Pehle exact ID se search karo
         let orderResult = await pool.request()
             .input('orderId', sql.Int, orderId)
             .query(`
@@ -1145,7 +1144,6 @@ aapp.get('/api/production/order/:id', async (req, res) => {
                 WHERE po.ProductionOrderID = @orderId
             `);
 
-        // Agar exact ID database mein na mile, toh fallback mein sabse latest pending order utha lo taaki testing na ruke
         if (orderResult.recordset.length === 0) {
             orderResult = await pool.request().query(`
                 SELECT TOP 1
@@ -1168,7 +1166,6 @@ aapp.get('/api/production/order/:id', async (req, res) => {
 
         const orderData = orderResult.recordset[0];
 
-        // Safely calculate completed quantity
         let qtyCompleted = 0;
         try {
             const batchResult = await pool.request()
