@@ -102,7 +102,11 @@ app.post('/api/login', async (req, res) => {
 
 //to protect all routes
 app.use('/api', authenticateToken);
-
+// VS Code Terminal mein live tracking ke liye
+app.use((req, res, next) => {
+    console.log(`🔥 [INCOMING REQUEST] Method: ${req.method} | URL: ${req.url}`);
+    next();
+});
 // ==========================================
 // ROLE ALLOCATION & SECURITY ROUTES
 // ==========================================
