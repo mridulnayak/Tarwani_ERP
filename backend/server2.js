@@ -1311,7 +1311,8 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     let transaction;
     try {
         const poId = parseInt(req.body.poId, 10);
-        const batchId = parseInt(req.body.batchId, 10); 
+        // Treat batchId as a string because it represents the string-based BatchNo
+        const batchNo = String(req.body.batchId).trim(); 
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
         const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
@@ -1319,7 +1320,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         const totalProcessingQty = yieldQty + wasteQty;
 
-        if (!poId || !batchId || !productId || totalProcessingQty <= 0) {
+        if (!poId || !batchNo || !productId || totalProcessingQty <= 0) {
             return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
         }
 
@@ -1329,26 +1330,24 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
-        // Uses ProducedQuantity and WastageQuantity to match your DB
-        // ---------------------------------------------------------
-        // ---------------------------------------------------------
-        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
-        // Uses QtyProduced to match your DB schema perfectly
+        // Querying by BatchNo instead of BatchID
         // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
-            .input('batchId', sql.BigInt, batchId) 
+            .input('batchNo', sql.VarChar, batchNo) 
             .query(`
                 SELECT 
+                    b.BatchID, -- Retrieve the internal ID for the INSERT later
                     b.QtyProduced AS BatchedQty, 
-                    ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = @batchId), 0) AS AlreadyCompletedQty
+                    ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
-                WHERE b.BatchID = @batchId
+                WHERE b.BatchNo = @batchNo
             `);
 
         if (checkResult.recordset.length === 0) {
-            throw new Error("Batch not found in the database. Please verify the Batch ID.");
+            throw new Error(`Batch number ${batchNo} not found in the database. Please verify the Batch ID.`);
         }
 
+        const internalBatchId = checkResult.recordset[0].BatchID;
         const batchedQty = checkResult.recordset[0].BatchedQty;
         const alreadyCompleted = checkResult.recordset[0].AlreadyCompletedQty;
         const remainingInBatch = batchedQty - alreadyCompleted;
@@ -1359,11 +1358,11 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 2: INSERT FGR RECORD
-        // Exact column mapping: ProductionOrderID, ProducedQuantity, WastageQuantity, LoggedBy
+        // Use the internalBatchId we just retrieved
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
-            .input('batchId', sql.BigInt, batchId) 
+            .input('batchId', sql.BigInt, internalBatchId) 
             .input('productId', sql.Int, productId)
             .input('yieldQty', sql.Int, yieldQty)
             .input('wasteQty', sql.Int, wasteQty)
@@ -1390,7 +1389,6 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
-        // Note: Make sure the target columns in ProductionOrders match your schema too
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
