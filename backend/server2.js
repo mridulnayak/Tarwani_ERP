@@ -1337,19 +1337,28 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
         // Querying by BatchNo instead of BatchID
         // ---------------------------------------------------------
+// ---------------------------------------------------------
+        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
+        // BULLETPROOFING: Handles hidden spaces AND checks both prefixed/unprefixed values
+        // ---------------------------------------------------------
+// ---------------------------------------------------------
+        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
+        // BULLETPROOFING: Handles hidden spaces AND checks both prefixed/unprefixed values
+        // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
             .input('batchNo', sql.VarChar, batchNo) 
             .query(`
                 SELECT 
-                    b.BatchID, -- Retrieve the internal ID for the INSERT later
+                    b.BatchID, 
                     b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
-                WHERE b.BatchNo = @batchNo
+                WHERE LTRIM(RTRIM(b.BatchNo)) = @batchNo 
+                   OR LTRIM(RTRIM(b.BatchNo)) = REPLACE(@batchNo, 'BTH-', '')
             `);
 
         if (checkResult.recordset.length === 0) {
-            throw new Error(`Batch number ${batchNo} not found in the database. Please verify the Batch ID.`);
+            throw new Error(`Batch number \${batchNo} not found in the database. Please verify the Batch ID.`);
         }
 
         const internalBatchId = checkResult.recordset[0].BatchID;
