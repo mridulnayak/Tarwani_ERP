@@ -974,6 +974,7 @@ app.post('/api/purchase-orders/delete/:id', async (req, res) => {
 // ==========================================
 // PURCHASE RECEIVING & INVENTORY ROUTES
 // ==========================================
+
 // 1. POST: Process Received Goods (GRN), Update Inventory & Tank Stock
 app.post('/api/purchase-receivings', async (req, res) => {
     const { vendorId, invoiceNo, vehicleNo, items } = req.body;
@@ -992,30 +993,33 @@ app.post('/api/purchase-receivings', async (req, res) => {
         for (const item of items) {
             const { productId, quantity, requiresTank, tankId } = item;
 
-            // 🔥 FIX: Strictly parse numbers to prevent mssql 500 crashes
             const safeVendorId = parseInt(vendorId, 10);
             const safeProductId = parseInt(productId, 10);
-            const safeQty = parseFloat(quantity);
+            
+            // Note: Your DB expects an INT for ReceivedQty based on your schema check
+            const safeQty = parseInt(quantity, 10); 
             const safeTankId = (requiresTank && tankId) ? parseInt(tankId, 10) : null;
 
-            // Step 1: Log the Receiving Entry
+            // Step 1: Log the Receiving Entry (Aligned with actual DB columns)
             await new sql.Request(transaction)
                 .input('grn', sql.VarChar, grnNumber)
                 .input('vendorId', sql.Int, safeVendorId)
                 .input('productId', sql.Int, safeProductId)
                 .input('tankId', sql.Int, safeTankId)
-                .input('qty', sql.Decimal(18, 2), safeQty) // Changed to Decimal in case of liters/decimals
+                .input('qty', sql.Int, safeQty) 
                 .input('invoiceNo', sql.VarChar, invoiceNo || '')
                 .input('vehicleNo', sql.VarChar, vehicleNo || '')
                 .query(`
-                    INSERT INTO mridul.PurchaseReceiving (GRN_Number, VendorID, ProductID, TankID, ReceivedQty, InvoiceNo, VehicleNo, ReceiveDate)
-                    VALUES (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE())
+                    INSERT INTO mridul.PurchaseReceiving 
+                    (GRN_Number, VendorID, ProductID, TankID, ReceivedQty, InvoiceNo, VehicleNo, ReceiptDate, ReceivedBy)
+                    VALUES 
+                    (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE(), 'Admin')
                 `);
 
             // Step 2: Update Main Warehouse Inventory
             await new sql.Request(transaction)
                 .input('productId', sql.Int, safeProductId)
-                .input('qty', sql.Decimal(18, 2), safeQty)
+                .input('qty', sql.Int, safeQty)
                 .query(`
                     UPDATE mridul.ProductMaster 
                     SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty 
@@ -1026,7 +1030,7 @@ app.post('/api/purchase-receivings', async (req, res) => {
             if (requiresTank && safeTankId) {
                 const tankResult = await new sql.Request(transaction)
                     .input('tankId', sql.Int, safeTankId)
-                    .input('qty', sql.Decimal(18, 2), safeQty)
+                    .input('qty', sql.Int, safeQty)
                     .query(`
                         UPDATE mridul.TankMaster 
                         SET CurrentStock = ISNULL(CurrentStock, 0) + @qty 
@@ -1061,17 +1065,20 @@ app.post('/api/purchase-receivings', async (req, res) => {
     }
 });
 
-// 2. GET: Fetch Recent Receivings (Fixes the "<!doctype html" frontend crash)
+// 2. GET: Fetch Recent Receivings
 app.get('/api/purchase-receivings', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
             SELECT TOP 50 
-                pr.ReceivingID, pr.GRN_Number, pr.InvoiceNo, pr.ReceiveDate, 
+                pr.ReceiptID, 
+                pr.GRN_Number, 
+                pr.InvoiceNo, 
+                pr.ReceiptDate AS ReceiveDate, 
                 p.PartyName AS VendorName 
             FROM mridul.PurchaseReceiving pr
             LEFT JOIN mridul.PartyMaster p ON pr.VendorID = p.PartyID
-            ORDER BY pr.ReceiveDate DESC
+            ORDER BY pr.ReceiptDate DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
