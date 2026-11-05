@@ -1304,12 +1304,14 @@ app.get('/api/finished-goods', async (req, res) => {
 });
 
 
+// ==========================================
 // STRICT FINISHED GOODS RECEIPT (FGR) ROUTE
+// ==========================================
 app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     let transaction;
     try {
         const poId = parseInt(req.body.poId, 10);
-        const batchId = parseInt(req.body.batchId, 10); // Still safely parsed as an integer in JS
+        const batchId = parseInt(req.body.batchId, 10); 
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
         const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
@@ -1327,14 +1329,14 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
+        // Uses ProducedQuantity and WastageQuantity to match your DB
         // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
-            // 🔥 FIX: Changed sql.Int to sql.BigInt for batchId
             .input('batchId', sql.BigInt, batchId) 
             .query(`
                 SELECT 
                     b.BatchedQty,
-                    ISNULL((SELECT SUM(YieldQty + WasteQty) FROM mridul.FinishedGoodsReceipt WHERE BatchID = @batchId), 0) AS AlreadyCompletedQty
+                    ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = @batchId), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
                 WHERE b.BatchID = @batchId
             `);
@@ -1353,17 +1355,18 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 2: INSERT FGR RECORD
+        // Exact column mapping: ProductionOrderID, ProducedQuantity, WastageQuantity, LoggedBy
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
-            // 🔥 FIX: Changed sql.Int to sql.BigInt for batchId
             .input('batchId', sql.BigInt, batchId) 
             .input('productId', sql.Int, productId)
             .input('yieldQty', sql.Int, yieldQty)
             .input('wasteQty', sql.Int, wasteQty)
             .input('receivedBy', sql.VarChar, receivedBy)
             .query(`
-                INSERT INTO mridul.FinishedGoodsReceipt (PO_ID, BatchID, ProductID, YieldQty, WasteQty, ReceivedBy, ReceiptDate)
+                INSERT INTO mridul.FinishedGoodsReceipt 
+                (ProductionOrderID, BatchID, ProductID, ProducedQuantity, WastageQuantity, LoggedBy, ReceiptDate)
                 VALUES (@poId, @batchId, @productId, @yieldQty, @wasteQty, @receivedBy, GETDATE())
             `);
 
@@ -1383,6 +1386,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
+        // Note: Make sure the target columns in ProductionOrders match your schema too
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
@@ -1391,7 +1395,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                 DECLARE @TotalCompleted INT;
 
                 SELECT @TargetQty = TargetQty FROM mridul.ProductionOrders WHERE PO_ID = @poId;
-                SELECT @TotalCompleted = ISNULL(SUM(YieldQty + WasteQty), 0) FROM mridul.FinishedGoodsReceipt WHERE PO_ID = @poId;
+                SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) FROM mridul.FinishedGoodsReceipt WHERE ProductionOrderID = @poId;
 
                 IF @TotalCompleted >= @TargetQty
                     UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE PO_ID = @poId;
