@@ -1392,18 +1392,18 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                 DECLARE @TotalCompleted INT;
 
                 -- Fetch target quantity using the correct column names
-                SELECT @TargetQty = TargetQuantity FROM mridul.ProductionOrders WHERE ProductionOrderID = @poId;
+                SELECT @TargetQty = TargetQuantity FROM mridul.ProductionOrders WHERE OrderID = @poId;
                 
                 -- Calculate total completed for this specific production order
                 SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) FROM mridul.FinishedGoodsReceipt WHERE ProductionOrderID = @poId;
 
                 -- Update Status Dynamically
                 IF @TotalCompleted >= @TargetQty
-                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE ProductionOrderID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE OrderID = @poId;
                 ELSE IF @TotalCompleted > 0
-                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE ProductionOrderID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE OrderID = @poId;
                 ELSE
-                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE ProductionOrderID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE OrderID = @poId;
             `);
 
         await transaction.commit();
