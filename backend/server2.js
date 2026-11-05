@@ -1308,12 +1308,11 @@ app.get('/api/finished-goods', async (req, res) => {
 app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     let transaction;
     try {
-        // 1. Extract data from frontend payload
         const poId = parseInt(req.body.poId, 10);
-        const batchId = parseInt(req.body.batchId, 10);
+        const batchId = parseInt(req.body.batchId, 10); // Still safely parsed as an integer in JS
         const productId = parseInt(req.body.productId, 10);
-        const yieldQty = parseInt(req.body.yieldQty || 0, 10); // Good products
-        const wasteQty = parseInt(req.body.wasteQty || 0, 10); // Defective products
+        const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
+        const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
         const receivedBy = req.body.receivedBy || 'System';
 
         const totalProcessingQty = yieldQty + wasteQty;
@@ -1330,7 +1329,8 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
         // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
-            .input('batchId', sql.Int, batchId)
+            // 🔥 FIX: Changed sql.Int to sql.BigInt for batchId
+            .input('batchId', sql.BigInt, batchId) 
             .query(`
                 SELECT 
                     b.BatchedQty,
@@ -1340,7 +1340,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
             `);
 
         if (checkResult.recordset.length === 0) {
-            throw new Error("Batch not found.");
+            throw new Error("Batch not found in the database. Please verify the Batch ID.");
         }
 
         const batchedQty = checkResult.recordset[0].BatchedQty;
@@ -1352,11 +1352,12 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         }
 
         // ---------------------------------------------------------
-        // RULE 2: INSERT FGR RECORD (Tracking Yield vs Waste)
+        // RULE 2: INSERT FGR RECORD
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
-            .input('batchId', sql.Int, batchId)
+            // 🔥 FIX: Changed sql.Int to sql.BigInt for batchId
+            .input('batchId', sql.BigInt, batchId) 
             .input('productId', sql.Int, productId)
             .input('yieldQty', sql.Int, yieldQty)
             .input('wasteQty', sql.Int, wasteQty)
@@ -1367,7 +1368,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
             `);
 
         // ---------------------------------------------------------
-        // RULE 3: UPDATE MAIN STOCK (Only Yield goes to stock)
+        // RULE 3: UPDATE MAIN STOCK
         // ---------------------------------------------------------
         if (yieldQty > 0) {
             await new sql.Request(transaction)
@@ -1389,13 +1390,9 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                 DECLARE @TargetQty INT;
                 DECLARE @TotalCompleted INT;
 
-                -- Get the target quantity from the PO
                 SELECT @TargetQty = TargetQty FROM mridul.ProductionOrders WHERE PO_ID = @poId;
-
-                -- Get the total completed across ALL batches for this PO
                 SELECT @TotalCompleted = ISNULL(SUM(YieldQty + WasteQty), 0) FROM mridul.FinishedGoodsReceipt WHERE PO_ID = @poId;
 
-                -- Update Status Dynamically
                 IF @TotalCompleted >= @TargetQty
                     UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE PO_ID = @poId;
                 ELSE IF @TotalCompleted > 0
