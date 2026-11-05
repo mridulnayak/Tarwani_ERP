@@ -1338,14 +1338,14 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                     b.BatchID, 
                     b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
-                FROM mridul.ProductionBatches b
+                FROM mridul.ProductionBatch b
                 -- WILDCARD MATCH: Agar number kahin bhi match hua toh pass
                 WHERE b.BatchNo LIKE '%' + @rawIdString + '%' 
                    OR CAST(b.BatchID AS VARCHAR) = @rawIdString
             `);
 
         if (checkResult.recordset.length === 0) {
-            throw new Error(`Batch number ${rawNumberString} not found in the database. Check if it exists in ProductionBatches.`);
+            throw new Error(`Batch number ${rawNumberString} not found in the database. Check if it exists in ProductionBatch.`);
         }
 
         const internalBatchId = checkResult.recordset[0].BatchID;
