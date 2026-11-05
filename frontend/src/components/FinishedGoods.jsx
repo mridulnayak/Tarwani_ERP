@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
+import { API_BASE_URL } from '../config';
 
 export default function FinishedGoodsReceipt({ user }) {
   const [productionOrders, setProductionOrders] = useState([]);

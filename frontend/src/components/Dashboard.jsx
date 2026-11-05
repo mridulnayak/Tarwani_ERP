@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config';
 
 export default function Dashboard({ user }) {
   const [stats, setStats] = useState({
