@@ -1311,8 +1311,14 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     let transaction;
     try {
         const poId = parseInt(req.body.poId, 10);
-        // Treat batchId as a string because it represents the string-based BatchNo
-        const batchNo = String(req.body.batchId).trim(); 
+        
+        // 🔥 FIX: SMART PREFIX SANITIZER 🔥
+        // Agar string mein 'BTH-' nahi hai, toh automatically add kar do
+        let rawBatchId = String(req.body.batchId).trim();
+        const batchNo = rawBatchId.toUpperCase().startsWith('BTH-') 
+                        ? rawBatchId.toUpperCase() 
+                        : 'BTH-' + rawBatchId;
+        
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
         const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
@@ -1323,7 +1329,6 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         if (!poId || !batchNo || !productId || totalProcessingQty <= 0) {
             return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
         }
-
         const pool = await sql.connect(dbConfig);
         transaction = new sql.Transaction(pool);
         await transaction.begin();
