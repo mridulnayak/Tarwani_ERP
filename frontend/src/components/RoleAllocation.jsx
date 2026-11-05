@@ -144,6 +144,8 @@ export default function RoleAllocation({ user }) {
                       placeholder="Search roles..."
                       className="w-full text-gray-900 text-sm"
                       classNamePrefix="erp-select"
+                      menuPortalTarget={document.body} 
+                      styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
                     />
                   </td>
                   

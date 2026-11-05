@@ -159,10 +159,10 @@ app.post('/api/users/roles/edit/:id', async (req, res) => {
 
 // 1. POST: Create a New Employee Account
 app.post('/api/users', async (req, res) => {
-    const { username, password, role } = req.body;
+    const { username, password, role, fullName } = req.body;
 
-    if (!username || !password || !role) {
-        return res.status(400).json({ error: 'Username, password, and role are required' });
+    if (!username || !password || !role || !fullName) {
+        return res.status(400).json({ error: 'All fields are required' });
     }
 
     try {
@@ -175,15 +175,15 @@ app.post('/api/users', async (req, res) => {
             .input('username', sql.VarChar, username)
             .input('passwordHash', sql.VarChar, hashedPassword)
             .input('role', sql.VarChar, role)
+            .input('fullName', sql.VarChar, fullName)
             .query(`
-                INSERT INTO mridul.Users (Username, PasswordHash, Role, IsActive)
-                VALUES (@username, @passwordHash, @role, 1)
+                INSERT INTO mridul.Users (Username, PasswordHash, Role, fullName, IsActive)
+                VALUES (@username, @passwordHash, @role, @fullName, 1)
             `);
 
         res.status(201).json({ message: 'User account created successfully!' });
     } catch (err) {
         console.error('Error creating user:', err);
-        // Handle duplicate username error gracefully
         if (err.number === 2627) {
             return res.status(400).json({ error: 'Username already exists.' });
         }
@@ -196,7 +196,7 @@ app.get('/api/users', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
-            SELECT UserID, Username, Role, IsActive 
+            SELECT UserID, Username, fullName, Role, IsActive 
             FROM mridul.Users 
             ORDER BY Role, Username
         `);

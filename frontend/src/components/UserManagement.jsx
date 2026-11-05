@@ -9,6 +9,7 @@ export default function UserManagement() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('');
+  const [fullName, setFullName] = useState(''); // New State
 
   const fetchUsers = async () => {
     try {
@@ -29,21 +30,21 @@ export default function UserManagement() {
   useEffect(() => { fetchUsers(); }, []);
 
   const accessRoleOptions = [
-    { value: 'Admin', label: 'Master Admin (Full Access)' },
-    { value: 'Sales', label: 'Sales Team (Sales & Dispatch)' },
-    { value: 'Store', label: 'Store Manager (Purchase & Issual)' },
-    { value: 'Production', label: 'Factory Floor (Production)' }
+    { value: 'Admin', label: 'Master Admin' },
+    { value: 'Sales', label: 'Sales Team' },
+    { value: 'Store', label: 'Store Manager' },
+    { value: 'Production', label: 'Factory Floor' }
   ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username || !password || !role) return alert("All fields are required.");
+    if (!username || !password || !role || !fullName) return alert("All fields are required.");
 
     try {
       const res = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, role })
+        body: JSON.stringify({ username, password, role, fullName })
       });
       
       const data = await res.json();
@@ -53,6 +54,7 @@ export default function UserManagement() {
         setUsername('');
         setPassword('');
         setRole('');
+        setFullName('');
         fetchUsers(); 
       } else {
         alert(data.error || "Failed to create account.");
@@ -96,48 +98,63 @@ export default function UserManagement() {
       
       {/* FORM SECTION */}
       <div className="p-5 md:p-6">
-        <form onSubmit={handleSubmit} className="bg-gray-50 p-5 rounded-xl border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+        <form onSubmit={handleSubmit} className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+          {/* Changed grid to 4 columns to fit Full Name beautifully */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-5">
+            
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase">Employee Username</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase">Full Name *</label>
+              <input 
+                type="text" 
+                value={fullName} 
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="e.g., Ravi Sharma"
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:bg-white transition-colors"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase">Username *</label>
               <input 
                 type="text" 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="e.g., ravi_store"
-                className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:bg-white transition-colors"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase">Temporary Password</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase">Temp Password *</label>
               <input 
                 type="text" 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Set a password"
-                className="w-full p-2.5 bg-white border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                className="w-full p-2.5 bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:bg-white transition-colors"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-gray-500 uppercase">Access Role</label>
+              <label className="text-xs font-semibold text-gray-500 uppercase">Access Role *</label>
               <Select
                 options={accessRoleOptions}
                 value={accessRoleOptions.find(opt => opt.value === role) || null}
                 onChange={(selected) => setRole(selected ? selected.value : '')}
                 isSearchable
-                isClearable
-                placeholder="Search access role..."
+                placeholder="Select role..."
                 className="w-full text-gray-900 text-sm"
-                classNamePrefix="erp-select"
+                
+                // 🔥 THE FIX FOR DROPDOWNS GETTING CUT OFF IN TIGHT SPACES
+                menuPortalTarget={document.body} 
+                styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
           </div>
 
           <button 
             type="submit" 
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-colors focus:ring-4 focus:ring-blue-300"
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-all active:scale-[0.99]"
           >
             + Create Employee Account
           </button>
@@ -150,55 +167,30 @@ export default function UserManagement() {
           <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Active System Users</h3>
         </div>
 
-        {/* MOBILE VIEW: Cards */}
-        <div className="md:hidden divide-y divide-gray-200">
-          {(users || []).map((u) => (
-            <div key={u.UserID} className="p-4 hover:bg-gray-50 transition-colors">
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-gray-900 text-lg">@{u.Username}</span>
-                <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${u.IsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                  {u.IsActive ? 'Active' : 'Disabled'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center mt-3">
-                <span className="text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
-                  {u.Role}
-                </span>
-                {u.Username !== 'admin' && (
-                  <button 
-                    onClick={() => toggleUserStatus(u.UserID, u.IsActive)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${u.IsActive ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
-                  >
-                    {u.IsActive ? 'Deactivate' : 'Reactivate'}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-
         {/* DESKTOP VIEW: Table */}
         <div className="hidden md:block w-full overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600">
-            <thead className="text-xs text-gray-700 uppercase bg-gray-100 border-b border-gray-200">
+            <thead className="text-xs text-gray-500 uppercase bg-white border-b border-gray-200">
               <tr>
+                <th className="px-6 py-4 font-semibold">Full Name</th>
                 <th className="px-6 py-4 font-semibold">Username</th>
                 <th className="px-6 py-4 font-semibold">System Role</th>
-                <th className="px-6 py-4 font-semibold">Status</th>
+                <th className="px-6 py-4 font-semibold text-center">Status</th>
                 <th className="px-6 py-4 font-semibold text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-100">
               {(users || []).map((u) => (
-                <tr key={u.UserID} className="hover:bg-gray-50 bg-white">
-                  <td className="px-6 py-4 font-bold text-gray-900">@{u.Username}</td>
+                <tr key={u.UserID} className="hover:bg-slate-50 transition-colors bg-white">
+                  <td className="px-6 py-4 font-bold text-gray-900">{u.fullName || '—'}</td>
+                  <td className="px-6 py-4 font-mono text-gray-600">@{u.Username}</td>
                   <td className="px-6 py-4">
-                    <span className="font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+                    <span className="font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded-md border border-blue-100">
                       {u.Role}
                     </span>
                   </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.IsActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                  <td className="px-6 py-4 text-center">
+                    <span className={`px-3 py-1 rounded-full text-[11px] uppercase tracking-wider font-bold ${u.IsActive ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                       {u.IsActive ? 'Active' : 'Disabled'}
                     </span>
                   </td>
@@ -206,7 +198,7 @@ export default function UserManagement() {
                     {u.Username !== 'admin' && (
                       <button 
                         onClick={() => toggleUserStatus(u.UserID, u.IsActive)}
-                        className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${u.IsActive ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800' : 'bg-green-100 hover:bg-green-200 text-green-800'}`}
+                        className={`px-4 py-2 rounded-md text-xs font-bold transition-all ${u.IsActive ? 'bg-white border border-gray-300 hover:bg-red-50 hover:text-red-700 text-gray-600' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                       >
                         {u.IsActive ? 'Deactivate' : 'Reactivate'}
                       </button>
