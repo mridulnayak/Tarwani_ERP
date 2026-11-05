@@ -1461,21 +1461,16 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     }
 });
 // ==========================================
-// ISSUAL MANAGEMENT ROUTES
+// PHYSICAL STOCK ISSUANCE ROUTES
 // ==========================================
 
-// 1. POST: Issue Materials and Deduct from Tanks
-app.post('/api/issuals', async (req, res) => {
-    const { productionOrderId, issuedBy, items } = req.body; 
+// 1. POST: Issue Materials to a Department
+app.post('/api/stock-issuances', async (req, res) => {
+    // We now capture 'department' exactly as the React payload sends it
+    const { department, items } = req.body; 
 
-    if (!productionOrderId || !items || items.length === 0) {
-        return res.status(400).json({ error: 'Production Order and at least one item are required' });
-    }
-
-    // Input Validation: Prevent zero or negative quantity issuals
-    const invalidItem = items.find(item => item.quantity <= 0);
-    if (invalidItem) {
-        return res.status(400).json({ error: 'All issued quantities must be greater than zero.' });
+    if (!department || !items || items.length === 0) {
+        return res.status(400).json({ error: 'Department and at least one item are required' });
     }
 
     const pool = await sql.connect(dbConfig);
@@ -1484,83 +1479,66 @@ app.post('/api/issuals', async (req, res) => {
     try {
         await transaction.begin(); 
 
-        // Step 1: Generate a unique Issue Number
-        const issueNumber = `ISSUE-${Date.now()}`;
+        const issueNumber = `ISS-${Date.now()}`;
 
-        // Step 2: Insert into Issual Header
-        const headerReq = new sql.Request(transaction);
-        const headerResult = await headerReq
+        // Step 1: Insert into Issual Header with the new Department column
+        const headerResult = await new sql.Request(transaction)
             .input('issueNum', sql.VarChar, issueNumber)
-            .input('poId', sql.Int, productionOrderId)
-            .input('issuedBy', sql.VarChar, issuedBy || 'System')
+            .input('department', sql.VarChar, department)
             .query(`
-                INSERT INTO mridul.IssualHeader (IssueNumber, ProductionOrderID, IssuedBy)
+                INSERT INTO mridul.IssualHeader (IssueNumber, Department, IssueDate, IssuedBy)
                 OUTPUT INSERTED.IssueID
-                VALUES (@issueNum, @poId, @issuedBy)
+                VALUES (@issueNum, @department, GETDATE(), 'Admin')
             `);
         
         const newIssueId = headerResult.recordset[0].IssueID;
 
-        // Step 3: Loop through the items to insert Details AND deduct Tank stock securely
+        // Step 2: Loop through items to insert Details AND deduct Inventory securely
         for (const item of items) {
-            // A. Log the specific item issued
-            const detailReq = new sql.Request(transaction);
-            await detailReq
+            const safeProductId = parseInt(item.productId, 10);
+            const safeQty = parseInt(item.quantity, 10);
+
+            // Insert into Details (Notice TankID is omitted/NULL for general issuances)
+            await new sql.Request(transaction)
                 .input('issueId', sql.Int, newIssueId)
-                .input('tankId', sql.Int, item.tankId)
-                .input('productId', sql.Int, item.productId)
-                .input('qty', sql.Int, item.quantity)
+                .input('productId', sql.Int, safeProductId)
+                .input('qty', sql.Int, safeQty)
                 .query(`
-                    INSERT INTO mridul.IssualDetails (IssueID, TankID, ProductID, Quantity)
-                    VALUES (@issueId, @tankId, @productId, @qty)
+                    INSERT INTO mridul.IssualDetails (IssueID, ProductID, Quantity)
+                    VALUES (@issueId, @productId, @qty)
                 `);
             
-            // B. Subtract the issued quantity from the physical Tank with Negative Stock Protection
-            const tankReq = new sql.Request(transaction);
-            const tankResult = await tankReq
-                .input('tankId', sql.Int, item.tankId)
-                .input('qty', sql.Int, item.quantity)
+            // Deduct the issued quantity from Main ProductMaster
+            const stockResult = await new sql.Request(transaction)
+                .input('productId', sql.Int, safeProductId)
+                .input('qty', sql.Int, safeQty)
                 .query(`
-                    UPDATE mridul.TankMaster
-                    SET CurrentStock = ISNULL(CurrentStock, 0) - @qty
-                    OUTPUT INSERTED.CurrentStock, INSERTED.TankName
-                    WHERE TankID = @tankId
+                    UPDATE mridul.ProductMaster
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) - @qty
+                    OUTPUT INSERTED.ClosingBalance, INSERTED.ProductName
+                    WHERE ProductID = @productId
                 `);
             
-            // Safety Check: If the stock drops below zero, abort the entire transaction
-            if (tankResult.recordset.length > 0 && tankResult.recordset[0].CurrentStock < 0) {
-                const tankName = tankResult.recordset[0].TankName;
-                throw new Error(`INSUFFICIENT_STOCK:${tankName}`);
+            // Safety Check: Prevent Negative Stock
+            if (stockResult.recordset.length > 0 && stockResult.recordset[0].ClosingBalance < 0) {
+                const productName = stockResult.recordset[0].ProductName;
+                throw new Error(`INSUFFICIENT_STOCK:${productName}`);
             }
         }
 
-        // Step 4: Update the Production Order status to 'In Progress'
-        const poReq = new sql.Request(transaction);
-        await poReq
-            .input('poId', sql.Int, productionOrderId)
-            .query(`
-                UPDATE mridul.ProductionOrder
-                SET Status = 'In Progress'
-                WHERE ProductionOrderID = @poId AND Status = 'Pending'
-            `);
-
         await transaction.commit(); 
-        res.status(201).json({ message: 'Materials successfully issued to the floor!', issueNumber });
+        res.status(201).json({ message: 'Materials successfully issued to the floor!' });
 
     } catch (err) {
-        // Safe Rollback Implementation
-        try {
-            await transaction.rollback();
-        } catch (rollbackErr) {
-            console.error('Rollback failed:', rollbackErr);
+        if (transaction) {
+            try { await transaction.rollback(); } catch (e) {}
         }
         
-        console.error('Issual Transaction Failed:', err.message || err);
+        console.error('Issual Transaction Failed:', err.message);
         
-        // Return a clean, user-friendly error to the React frontend
         if (err.message && err.message.startsWith('INSUFFICIENT_STOCK')) {
-            const tankName = err.message.split(':')[1];
-            return res.status(400).json({ error: `Insufficient stock in ${tankName}. Please check tank levels.` });
+            const productName = err.message.split(':')[1];
+            return res.status(400).json({ error: `Insufficient stock of ${productName}. Cannot issue.` });
         }
         
         res.status(500).json({ error: 'Failed to issue materials. Server encountered an error.' });
@@ -1568,26 +1546,24 @@ app.post('/api/issuals', async (req, res) => {
 });
 
 // 2. GET: Fetch Issual History
-app.get('/api/issuals', async (req, res) => {
+app.get('/api/stock-issuances', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
+        
+        // Aliasing the SQL output to perfectly match what React expects (IssualNo, IssualDate)
         const result = await pool.request().query(`
             SELECT 
-                i.IssueID, 
-                i.IssueNumber, 
-                i.IssueDate, 
-                i.IssuedBy, 
-                po.ProductionOrderID AS ProductionRef,
-                p.ProductName AS TargetProduct, 
-                po.TargetQuantity
-            FROM mridul.IssualHeader i
-            INNER JOIN mridul.ProductionOrder po ON i.ProductionOrderID = po.ProductionOrderID
-            INNER JOIN mridul.ProductMaster p ON po.ProductID = p.ProductID
-            ORDER BY i.IssueDate DESC
+                h.IssueID, 
+                h.IssueNumber AS IssualNo, 
+                h.Department, 
+                h.IssueDate AS IssualDate, 
+                (SELECT COUNT(*) FROM mridul.IssualDetails d WHERE d.IssueID = h.IssueID) AS TotalItems
+            FROM mridul.IssualHeader h
+            ORDER BY h.IssueDate DESC
         `);
         res.status(200).json(result.recordset);
     } catch (err) {
-        console.error('Error fetching issuals:', err);
+        console.error('Error fetching issuances:', err);
         res.status(500).json({ error: 'Failed to fetch Issual records' });
     }
 });
