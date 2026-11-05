@@ -1326,11 +1326,8 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         const pool = await sql.connect(dbConfig);
         transaction = new sql.Transaction(pool);
         await transaction.begin();
-
-        // ---------------------------------------------------------
-        // RULE 1: STRICT VALIDATION - OMNI-SEARCH
-        // Searches BatchNo (with and without prefix) AND BatchID
-        // ---------------------------------------------------------
+        // RULE 1: STRICT VALIDATION - WILDCARD SEARCH
+        // -------------------------------------------
         const checkResult = await new sql.Request(transaction)
             .input('rawIdString', sql.VarChar, rawNumberString) 
             .query(`
@@ -1338,8 +1335,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                     b.BatchID, 
                     b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
-                FROM mridul.ProductionBatch b
-                -- WILDCARD MATCH: Agar number kahin bhi match hua toh pass
+                FROM mridul.ProductionBatch b 
                 WHERE b.BatchNo LIKE '%' + @rawIdString + '%' 
                    OR CAST(b.BatchID AS VARCHAR) = @rawIdString
             `);
@@ -1387,24 +1383,27 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                 `);
         }
 
-        // ---------------------------------------------------------
+
         // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
-        // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
             .query(`
                 DECLARE @TargetQty INT;
                 DECLARE @TotalCompleted INT;
 
-                SELECT @TargetQty = TargetQty FROM mridul.ProductionOrders WHERE PO_ID = @poId;
+                -- Fetch target quantity using the correct column names
+                SELECT @TargetQty = TargetQuantity FROM mridul.ProductionOrders WHERE ProductionOrderID = @poId;
+                
+                -- Calculate total completed for this specific production order
                 SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) FROM mridul.FinishedGoodsReceipt WHERE ProductionOrderID = @poId;
 
+                -- Update Status Dynamically
                 IF @TotalCompleted >= @TargetQty
-                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE PO_ID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE ProductionOrderID = @poId;
                 ELSE IF @TotalCompleted > 0
-                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE PO_ID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE ProductionOrderID = @poId;
                 ELSE
-                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE PO_ID = @poId;
+                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE ProductionOrderID = @poId;
             `);
 
         await transaction.commit();
