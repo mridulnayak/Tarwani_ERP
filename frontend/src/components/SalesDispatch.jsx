@@ -26,19 +26,19 @@ export default function SalesDispatch({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       
-      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
+      const soRes = await fetch(`${API_BASE_URL}/sales-orders`, {
         headers: { 'x-access-token': token }
       });
       const soData = soRes.ok ? await soRes.json() : [];
       setSalesOrders(Array.isArray(soData) ? soData : []);
 
-      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+      const partyRes = await fetch(`${API_BASE_URL}/parties`, {
         headers: { 'x-access-token': token }
       });
       const partyData = partyRes.ok ? await partyRes.json() : [];
       setEmployees(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Employee') : []);
 
-      const dispRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
+      const dispRes = await fetch(`${API_BASE_URL}/sales-dispatches`, {
         headers: { 'x-access-token': token }
       });
       const dispData = dispRes.ok ? await dispRes.json() : [];
@@ -60,7 +60,7 @@ const handleSalesOrderChange = async (soId) => {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${soId}/dispatch-items-v2`, {
+      const res = await fetch(`${API_BASE_URL}/sales-orders/${soId}/dispatch-items-v2`, {
         headers: { 'x-access-token': token }
       });
       
@@ -138,7 +138,7 @@ const handleSalesOrderChange = async (soId) => {
         }))
       };
 
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-dispatches', {
+      const res = await fetch(`${API_BASE_URL}/sales-dispatches`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

@@ -15,7 +15,7 @@ export default function TankMaster({ user }) {
   const fetchTanks = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/tanks', {
+      const res = await fetch(`${API_BASE_URL}/tanks`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -39,8 +39,8 @@ export default function TankMaster({ user }) {
 
     const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/tanks/edit/${editingId}`
-      : 'https://sms.uvtechsolutions.co.in/api/tanks';
+      ? `${API_BASE_URL}/tanks/edit/${editingId}`
+      : `${API_BASE_URL}/tanks`;
 
     try {
       const token = localStorage.getItem('erp_token');
@@ -77,7 +77,7 @@ export default function TankMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/tanks/delete/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/tanks/delete/${id}`, {
         method: 'POST',
         headers: { 'x-access-token': token}
       });

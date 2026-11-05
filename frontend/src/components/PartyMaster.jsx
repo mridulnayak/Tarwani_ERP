@@ -36,7 +36,7 @@ export default function PartyMaster({ user }) {
     const token = localStorage.getItem('erp_token');
 
     try {
-      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+      const pRes = await fetch(`${API_BASE_URL}/parties`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -49,7 +49,7 @@ export default function PartyMaster({ user }) {
     }
 
     try {
-      const dRes = await fetch('https://sms.uvtechsolutions.co.in/api/designations', {
+      const dRes = await fetch(`${API_BASE_URL}/designations`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -75,8 +75,8 @@ export default function PartyMaster({ user }) {
     if (!partyName || !partyType) return alert("Please fill in all required fields.");
 
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/parties/edit/${editingId}`
-      : 'https://sms.uvtechsolutions.co.in/api/parties';
+      ? `${API_BASE_URL}/parties/edit/${editingId}`
+      : `${API_BASE_URL}/parties`;
 
     try {
       const token = localStorage.getItem('erp_token');
@@ -126,7 +126,7 @@ export default function PartyMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/parties/delete/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/parties/delete/${id}`, {
         method: 'POST',
         headers: { 
             'Content-Type': 'application/json',

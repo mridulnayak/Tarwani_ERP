@@ -1390,18 +1390,18 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
             .query(`
                 DECLARE @TotalCompleted INT;
 
-                -- Kitna complete hua hai wo FGR table se nikalenge
+                -- Calculate total completed from the receipts table
                 SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) 
                 FROM mridul.FinishedGoodsReceipt 
                 WHERE ProductionOrderID = @poId;
 
-                -- Exact OrderID use karke status update karenge
+                -- Update Status Dynamically in the SINGULAR table
                 IF @TotalCompleted >= @targetQty
-                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE OrderID = @poId;
+                    UPDATE mridul.ProductionOrder SET Status = 'Completed' WHERE OrderID = @poId;
                 ELSE IF @TotalCompleted > 0
-                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE OrderID = @poId;
+                    UPDATE mridul.ProductionOrder SET Status = 'Pending' WHERE OrderID = @poId;
                 ELSE
-                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE OrderID = @poId;
+                    UPDATE mridul.ProductionOrder SET Status = 'Raised' WHERE OrderID = @poId;
             `);
         await transaction.commit();
         return res.status(201).json({ message: 'Finished Goods received safely, Stock updated, and PO Status checked!' });

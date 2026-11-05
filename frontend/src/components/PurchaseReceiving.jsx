@@ -26,10 +26,10 @@ export default function PurchaseReceiving({ user }) {
       const token = localStorage.getItem('erp_token');
       
       const [partyRes, prodRes, tankRes, recRes] = await Promise.all([
-        fetch('https://sms.uvtechsolutions.co.in/api/parties', { headers: { 'x-access-token': token } }),
-        fetch('https://sms.uvtechsolutions.co.in/api/products', { headers: { 'x-access-token': token } }),
-        fetch('https://sms.uvtechsolutions.co.in/api/tanks', { headers: { 'x-access-token': token } }), // Assuming you have a tanks API
-        fetch('https://sms.uvtechsolutions.co.in/api/purchase-receivings', { headers: { 'x-access-token': token } })
+        fetch(`${API_BASE_URL}/parties`, { headers: { 'x-access-token': token } }),
+        fetch(`${API_BASE_URL}/products`, { headers: { 'x-access-token': token } }),
+        fetch(`${API_BASE_URL}/tanks`, { headers: { 'x-access-token': token } }), // Assuming you have a tanks API
+        fetch(`${API_BASE_URL}/purchase-receivings`, { headers: { 'x-access-token': token } })
       ]);
 
       const partyData = partyRes.ok ? await partyRes.json() : [];
@@ -95,7 +95,7 @@ export default function PurchaseReceiving({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/purchase-receivings', {
+      const res = await fetch(`${API_BASE_URL}/purchase-receivings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-access-token': token },
         body: JSON.stringify({ vendorId, invoiceNo, vehicleNo, items: receivedItems })

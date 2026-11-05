@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-
+import { API_BASE_URL } from '../config';
 export default function BrandMaster({ user }) {
   const [brands, setBrands] = useState([]);
   
@@ -14,7 +14,7 @@ export default function BrandMaster({ user }) {
   const fetchBrands = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/brands', {
+      const res = await fetch(`${API_BASE_URL}/brands`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -35,8 +35,8 @@ export default function BrandMaster({ user }) {
 
     const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/brands/edit/${editingId}`
-      : 'https://sms.uvtechsolutions.co.in/api/brands';
+      ? `${API_BASE_URL}/brands/edit/${editingId}`
+      : `${API_BASE_URL}/brands`;
 
     try {
       const token = localStorage.getItem('erp_token');
@@ -74,7 +74,7 @@ export default function BrandMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/brands/delete/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/brands/delete/${id}`, {
         method: 'POST',
         headers: { 'x-access-token': token }
       });

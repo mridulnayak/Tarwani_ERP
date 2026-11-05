@@ -12,7 +12,7 @@ export default function UserManagement() {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users', {
+      const res = await fetch(`${API_BASE_URL}/users`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -39,7 +39,7 @@ export default function UserManagement() {
     if (!username || !password || !role) return alert("All fields are required.");
 
     try {
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users', {
+      const res = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password, role })
@@ -66,7 +66,7 @@ export default function UserManagement() {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/users/toggle-status/${userId}`, {
+      const res = await fetch(`${API_BASE_URL}/users/toggle-status/${userId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

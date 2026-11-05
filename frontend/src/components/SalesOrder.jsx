@@ -29,21 +29,21 @@ export default function SalesOrder({ user }) {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+      const partyRes = await fetch(`${API_BASE_URL}/parties`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
       const partyData = await partyRes.json();
       setCustomers(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Customer') : []);
 
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+      const prodRes = await fetch(`${API_BASE_URL}/products`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
       const prodData = await prodRes.json();
       setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const soRes = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
+      const soRes = await fetch(`${API_BASE_URL}/sales-orders`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -72,7 +72,7 @@ export default function SalesOrder({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/parties', {
+      const res = await fetch(`${API_BASE_URL}/parties`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -127,7 +127,7 @@ export default function SalesOrder({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/sales-orders', {
+      const res = await fetch(`${API_BASE_URL}/sales-orders`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -154,7 +154,7 @@ export default function SalesOrder({ user }) {
   const generateOrderAcknowledgment = async (order) => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/sales-orders/${order.SO_ID}/items`, {
+      const res = await fetch(`${API_BASE_URL}/sales-orders/${order.SO_ID}/items`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });

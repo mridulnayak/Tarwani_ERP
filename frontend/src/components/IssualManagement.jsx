@@ -18,13 +18,13 @@ export default function IssualManagement({ user }) {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+      const prodRes = await fetch(`${API_BASE_URL}/products`, {
         headers: { 'x-access-token': token }
       });
       const prodData = prodRes.ok ? await prodRes.json() : [];
       setProducts(Array.isArray(prodData) ? prodData : []);
 
-      const issRes = await fetch('https://sms.uvtechsolutions.co.in/api/stock-issuances', {
+      const issRes = await fetch(`${API_BASE_URL}/stock-issuances`, {
         headers: { 'x-access-token': token }
       });
       const issData = issRes.ok ? await issRes.json() : [];
@@ -65,7 +65,7 @@ export default function IssualManagement({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/stock-issuances', {
+      const res = await fetch(`${API_BASE_URL}/stock-issuances`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

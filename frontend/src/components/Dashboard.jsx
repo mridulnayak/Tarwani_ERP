@@ -12,7 +12,7 @@ export default function Dashboard({ user }) {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('erp_token');
-        const res = await fetch('https://sms.uvtechsolutions.co.in/api/dashboard-stats', {
+        const res = await fetch(`${API_BASE_URL}/dashboard-stats`, {
           method: 'GET',
           headers: { 'x-access-token': token }
         });

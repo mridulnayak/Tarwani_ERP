@@ -14,13 +14,14 @@ export default function ProductMaster({ user }) {
   
   // Enterprise Features State
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedMaterialTypeFilter, setSelectedMaterialTypeFilter] = useState('ALL');
   const [editingId, setEditingId] = useState(null);
   const [isFormVisible, setIsFormVisible] = useState(false);
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const pRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+      const pRes = await fetch(`${API_BASE_URL}/products`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -34,7 +35,7 @@ export default function ProductMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const bRes = await fetch('https://sms.uvtechsolutions.co.in/api/brands', {
+      const bRes = await fetch(`${API_BASE_URL}/brands`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -60,6 +61,12 @@ export default function ProductMaster({ user }) {
     { value: 'Raw Material', label: 'Raw Material (For Production)' },
     { value: 'Packaging', label: 'Packaging Material' }
   ];
+  const materialTypeFilterOptions = [
+    { value: 'ALL', label: 'All Material Types' },
+    { value: 'Finished Good', label: 'Finished Goods' },
+    { value: 'Raw Material', label: 'Raw Materials' },
+    { value: 'Packaging', label: 'Packaging Materials' }
+  ];
   const itemStateOptions = [
     { value: 'Solid', label: 'Solid (Warehouse Storage)' },
     { value: 'Liquid', label: 'Liquid (Tank Storage)' }
@@ -78,8 +85,8 @@ export default function ProductMaster({ user }) {
     
     const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/products/edit/${editingId}`
-      : 'https://sms.uvtechsolutions.co.in/api/products';
+      ? `${API_BASE_URL}/products/edit/${editingId}`
+      : `${API_BASE_URL}/products`;
 
     try {
       const token = localStorage.getItem('erp_token');
@@ -126,7 +133,7 @@ export default function ProductMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/products/delete/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/products/delete/${id}`, {
         method: 'POST',
         headers: { 'x-access-token': token }
       });
@@ -150,11 +157,17 @@ export default function ProductMaster({ user }) {
     setIsFormVisible(false);
   };
 
-  const filteredProducts = products.filter(p => 
-    p.ProductName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.BrandName && p.BrandName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (p.MaterialType && p.MaterialType.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProducts = products.filter(p => {
+    const materialType = p.MaterialType || 'Finished Good';
+    const matchesType = selectedMaterialTypeFilter === 'ALL' || materialType === selectedMaterialTypeFilter;
+    const searchLower = searchTerm.toLowerCase();
+    const matchesSearch = (
+      p.ProductName.toLowerCase().includes(searchLower) ||
+      (p.BrandName && p.BrandName.toLowerCase().includes(searchLower)) ||
+      materialType.toLowerCase().includes(searchLower)
+    );
+    return matchesType && matchesSearch;
+  });
 
   return (
     <div className="bg-white rounded-md shadow-md border border-gray-300 overflow-hidden mb-8">
@@ -165,7 +178,17 @@ export default function ProductMaster({ user }) {
           Product & Material Master
         </h2>
         
-        <div className="flex w-full md:w-auto gap-3">
+        <div className="flex flex-col md:flex-row w-full md:w-auto gap-3">
+          <div className="w-full md:w-48">
+            <Select
+              options={materialTypeFilterOptions}
+              value={materialTypeFilterOptions.find(opt => opt.value === selectedMaterialTypeFilter) || materialTypeFilterOptions[0]}
+              onChange={(selected) => setSelectedMaterialTypeFilter(selected ? selected.value : 'ALL')}
+              isSearchable={false}
+              className="text-gray-900 text-sm"
+              classNamePrefix="erp-select"
+            />
+          </div>
           <input
             type="search"
             placeholder="Search name, brand, or type..."

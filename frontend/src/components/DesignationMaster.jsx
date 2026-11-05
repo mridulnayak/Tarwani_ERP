@@ -14,7 +14,7 @@ export default function DesignationMaster({ user }) {
   const fetchDesignations = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/designations', {
+      const res = await fetch(`${API_BASE_URL}/designations`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -39,8 +39,8 @@ export default function DesignationMaster({ user }) {
 
     const method = 'POST';
     const url = editingId 
-      ? `https://sms.uvtechsolutions.co.in/api/designations/edit/${editingId}`
-      : 'https://sms.uvtechsolutions.co.in/api/designations';
+      ? `${API_BASE_URL}/designations/edit/${editingId}`
+      : `${API_BASE_URL}/designations`;
 
     try {
       const token = localStorage.getItem('erp_token');
@@ -78,7 +78,7 @@ export default function DesignationMaster({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/designations/delete/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/designations/delete/${id}`, {
         method: 'POST',
         headers: { 'x-access-token': token }
       });

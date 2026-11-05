@@ -19,7 +19,7 @@ export default function ProductionOrder({ user }) {
       const token = localStorage.getItem('erp_token');
 
       // Fetch Products
-      const prodRes = await fetch('https://sms.uvtechsolutions.co.in/api/products', {
+      const prodRes = await fetch(`${API_BASE_URL}/products`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -33,7 +33,7 @@ export default function ProductionOrder({ user }) {
       }
 
       // Fetch Production Orders
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+      const poRes = await fetch(`${API_BASE_URL}/production-orders`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -65,7 +65,7 @@ export default function ProductionOrder({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+      const res = await fetch(`${API_BASE_URL}/production-orders`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

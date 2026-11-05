@@ -19,7 +19,7 @@ export default function ProductionEntry({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', {
+      const poRes = await fetch(`${API_BASE_URL}/production-orders`, {
         headers: { 'x-access-token': token }
       });
       const poContentType = poRes.headers.get("content-type");
@@ -31,7 +31,7 @@ export default function ProductionEntry({ user }) {
         setProductionOrders([]);
       }
 
-      const batchRes = await fetch('https://sms.uvtechsolutions.co.in/api/production/batches', {
+      const batchRes = await fetch(`${API_BASE_URL}/production/batches`, {
         headers: { 'x-access-token': token }
       }).catch((error) => {
         console.error("Error fetching recent batches:", error);
@@ -73,7 +73,7 @@ export default function ProductionEntry({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/order/${orderId}`, {
+      const res = await fetch(`${API_BASE_URL}/production/order/${orderId}`, {
         headers: { 'x-access-token': token }
       });
       
@@ -123,7 +123,7 @@ const handleGenerateBatch = async () => {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/production/batch/create`, {
+      const res = await fetch(`${API_BASE_URL}/production/batch/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-access-token': token },
         body: JSON.stringify({ OrderID: activeOrder.OrderID, items: batchItems })

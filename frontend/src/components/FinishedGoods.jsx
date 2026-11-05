@@ -24,19 +24,19 @@ export default function FinishedGoodsReceipt({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       
-      const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', { headers: { 'x-access-token': token } });
+      const poRes = await fetch(`${API_BASE_URL}/production-orders`, { headers: { 'x-access-token': token } });
       if (poRes.headers.get("content-type")?.includes("application/json")) {
         const poData = await poRes.json();
         setProductionOrders(Array.isArray(poData) ? poData : []);
       }
 
-      const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', { headers: { 'x-access-token': token } });
+      const partyRes = await fetch(`${API_BASE_URL}/parties`, { headers: { 'x-access-token': token } });
       if (partyRes.headers.get("content-type")?.includes("application/json")) {
         const partyData = await partyRes.json();
         setEmployees(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Employee') : []);
       }
 
-      const recRes = await fetch('https://sms.uvtechsolutions.co.in/api/finished-goods', { headers: { 'x-access-token': token } });
+      const recRes = await fetch(`${API_BASE_URL}/finished-goods`, { headers: { 'x-access-token': token } });
       if (recRes.headers.get("content-type")?.includes("application/json")) {
         const recData = await recRes.json();
         setReceipts(Array.isArray(recData) ? recData : []);
@@ -101,7 +101,7 @@ export default function FinishedGoodsReceipt({ user }) {
         targetQty: parseFloat(activeOrder.targetQty) || 0  
       };
 
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/finished-goods', {
+      const res = await fetch(`${API_BASE_URL}/finished-goods`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-access-token': token },
         body: JSON.stringify(payload)

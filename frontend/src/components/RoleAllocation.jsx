@@ -11,7 +11,7 @@ export default function RoleAllocation({ user }) {
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch('https://sms.uvtechsolutions.co.in/api/users/roles', {
+      const res = await fetch(`${API_BASE_URL}/users/roles`, {
         method: 'GET',
         headers: { 'x-access-token': token }
       });
@@ -41,7 +41,7 @@ export default function RoleAllocation({ user }) {
 
     try {
       const token = localStorage.getItem('erp_token');
-      const res = await fetch(`https://sms.uvtechsolutions.co.in/api/users/roles/edit/${userId}`, {
+      const res = await fetch(`${API_BASE_URL}/users/roles/edit/${userId}`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
