@@ -666,12 +666,28 @@ app.post('/api/tanks', async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Failed to create tank' }); }
 });
 
+// Get all tanks (GET)
 app.get('/api/tanks', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const result = await pool.request().query('SELECT * FROM mridul.TankMaster');
+        
+        // 🔥 FIX: Sanitize NULL values into 0 so React math doesn't break
+        // Also pre-calculating FreeSpace at the database level as a failsafe
+        const result = await pool.request().query(`
+            SELECT 
+                TankID,
+                TankName,
+                ISNULL(Capacity, 0) AS Capacity,
+                ISNULL(CurrentStock, 0) AS CurrentStock,
+                (ISNULL(Capacity, 0) - ISNULL(CurrentStock, 0)) AS FreeSpace
+            FROM mridul.TankMaster
+        `);
+        
         res.status(200).json(result.recordset);
-    } catch (err) { res.status(500).json({ error: 'Failed to fetch tanks' }); }
+    } catch (err) { 
+        console.error('Error fetching tanks:', err.message);
+        res.status(500).json({ error: 'Failed to fetch tanks' }); 
+    }
 });
 
 // Update an existing tank (EDIT)
@@ -958,7 +974,6 @@ app.post('/api/purchase-orders/delete/:id', async (req, res) => {
 // ==========================================
 // PURCHASE RECEIVING & INVENTORY ROUTES
 // ==========================================
-
 // 1. POST: Process Received Goods (GRN), Update Inventory & Tank Stock
 app.post('/api/purchase-receivings', async (req, res) => {
     const { vendorId, invoiceNo, vehicleNo, items } = req.body;
@@ -974,18 +989,22 @@ app.post('/api/purchase-receivings', async (req, res) => {
         await transaction.begin(); 
         const grnNumber = `GRN-${Date.now()}`;
 
-        // Loop through each item in the truck/delivery
         for (const item of items) {
             const { productId, quantity, requiresTank, tankId } = item;
 
+            // 🔥 FIX: Strictly parse numbers to prevent mssql 500 crashes
+            const safeVendorId = parseInt(vendorId, 10);
+            const safeProductId = parseInt(productId, 10);
+            const safeQty = parseFloat(quantity);
+            const safeTankId = (requiresTank && tankId) ? parseInt(tankId, 10) : null;
+
             // Step 1: Log the Receiving Entry
-            const receiptReq = new sql.Request(transaction);
-            await receiptReq
+            await new sql.Request(transaction)
                 .input('grn', sql.VarChar, grnNumber)
-                .input('vendorId', sql.Int, vendorId)
-                .input('productId', sql.Int, productId)
-                .input('tankId', sql.Int, requiresTank ? tankId : null)
-                .input('qty', sql.Int, quantity)
+                .input('vendorId', sql.Int, safeVendorId)
+                .input('productId', sql.Int, safeProductId)
+                .input('tankId', sql.Int, safeTankId)
+                .input('qty', sql.Decimal(18, 2), safeQty) // Changed to Decimal in case of liters/decimals
                 .input('invoiceNo', sql.VarChar, invoiceNo || '')
                 .input('vehicleNo', sql.VarChar, vehicleNo || '')
                 .query(`
@@ -993,23 +1012,21 @@ app.post('/api/purchase-receivings', async (req, res) => {
                     VALUES (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE())
                 `);
 
-            // Step 2: Update Main Warehouse Inventory (ClosingBalance)
-            const inventoryReq = new sql.Request(transaction);
-            await inventoryReq
-                .input('productId', sql.Int, productId)
-                .input('qty', sql.Int, quantity)
+            // Step 2: Update Main Warehouse Inventory
+            await new sql.Request(transaction)
+                .input('productId', sql.Int, safeProductId)
+                .input('qty', sql.Decimal(18, 2), safeQty)
                 .query(`
                     UPDATE mridul.ProductMaster 
                     SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty 
                     WHERE ProductID = @productId
                 `);
 
-            // Step 3: If it's a Liquid going into a Tank, update the Tank WITH Overfill Protection
-            if (requiresTank && tankId) {
-                const tankReq = new sql.Request(transaction);
-                const tankResult = await tankReq
-                    .input('tankId', sql.Int, tankId)
-                    .input('qty', sql.Int, quantity)
+            // Step 3: Tank Overfill Protection
+            if (requiresTank && safeTankId) {
+                const tankResult = await new sql.Request(transaction)
+                    .input('tankId', sql.Int, safeTankId)
+                    .input('qty', sql.Decimal(18, 2), safeQty)
                     .query(`
                         UPDATE mridul.TankMaster 
                         SET CurrentStock = ISNULL(CurrentStock, 0) + @qty 
@@ -1017,34 +1034,49 @@ app.post('/api/purchase-receivings', async (req, res) => {
                         WHERE TankID = @tankId
                     `);
 
-                // Evaluate Overfill Protection
                 if (tankResult.recordset.length > 0) {
                     const { CurrentStock, Capacity, TankName } = tankResult.recordset[0];
                     if (CurrentStock > Capacity) {
-                        // Throwing an error here triggers the rollback for the ENTIRE truckload
                         throw new Error(`OVERFILL:${TankName}:${Capacity}`);
                     }
                 }
             }
         }
 
-        // If all items pass successfully, commit everything to the database
         await transaction.commit(); 
-        res.status(201).json({ message: 'Goods received, inventory, and tank stock updated successfully!' });
+        res.status(201).json({ message: 'Goods received successfully!' });
 
     } catch (err) {
-        // Safe Rollback - If even one tank overfills, the whole GRN is cancelled
-        try { await transaction.rollback(); } catch (rollbackErr) { console.error("Rollback failed:", rollbackErr); }
+        if (transaction) {
+            try { await transaction.rollback(); } catch (e) { }
+        }
         
-        console.error('Receiving Transaction Failed:', err.message || err);
+        console.error('Receiving Transaction Failed:', err.message);
 
-        // Friendly UI Errors
         if (err.message && err.message.startsWith('OVERFILL')) {
             const [_, tankName, capacity] = err.message.split(':');
             return res.status(400).json({ error: `Cannot receive items. This will overfill ${tankName} (Max Capacity: ${capacity}L).` });
         }
+        res.status(500).json({ error: 'Failed to process receiving. Check terminal for SQL errors.' });
+    }
+});
 
-        res.status(500).json({ error: 'Failed to process receiving and update stock.' });
+// 2. GET: Fetch Recent Receivings (Fixes the "<!doctype html" frontend crash)
+app.get('/api/purchase-receivings', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT TOP 50 
+                pr.ReceivingID, pr.GRN_Number, pr.InvoiceNo, pr.ReceiveDate, 
+                p.PartyName AS VendorName 
+            FROM mridul.PurchaseReceiving pr
+            LEFT JOIN mridul.PartyMaster p ON pr.VendorID = p.PartyID
+            ORDER BY pr.ReceiveDate DESC
+        `);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error('Error fetching receivings:', err.message);
+        res.status(500).json({ error: 'Failed to fetch receivings' });
     }
 });
 
