@@ -1383,25 +1383,33 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
 
 
+// ---------------------------------------------------------
         // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
+        // Using exactly 'ProductionOrderID' and 'TargetQuantity' from the real table
+        // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
-            .input('targetQty', sql.Int, targetQty)
             .query(`
+                DECLARE @TargetQty INT;
                 DECLARE @TotalCompleted INT;
 
-                -- Calculate total completed from the receipts table
+                -- Asli table (ProductionOrder) se TargetQuantity nikal rahe hain
+                SELECT @TargetQty = TargetQuantity 
+                FROM mridul.ProductionOrder 
+                WHERE ProductionOrderID = @poId;
+
+                -- Receipts table se total completed calculate kar rahe hain
                 SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) 
                 FROM mridul.FinishedGoodsReceipt 
                 WHERE ProductionOrderID = @poId;
 
-                -- Update Status Dynamically in the SINGULAR table
-                IF @TotalCompleted >= @targetQty
-                    UPDATE mridul.ProductionOrder SET Status = 'Completed' WHERE OrderID = @poId;
+                -- Status update kar rahe hain exact ProductionOrderID use karke
+                IF @TotalCompleted >= @TargetQty
+                    UPDATE mridul.ProductionOrder SET Status = 'Completed' WHERE ProductionOrderID = @poId;
                 ELSE IF @TotalCompleted > 0
-                    UPDATE mridul.ProductionOrder SET Status = 'Pending' WHERE OrderID = @poId;
+                    UPDATE mridul.ProductionOrder SET Status = 'Pending' WHERE ProductionOrderID = @poId;
                 ELSE
-                    UPDATE mridul.ProductionOrder SET Status = 'Raised' WHERE OrderID = @poId;
+                    UPDATE mridul.ProductionOrder SET Status = 'Raised' WHERE ProductionOrderID = @poId;
             `);
         await transaction.commit();
         return res.status(201).json({ message: 'Finished Goods received safely, Stock updated, and PO Status checked!' });
