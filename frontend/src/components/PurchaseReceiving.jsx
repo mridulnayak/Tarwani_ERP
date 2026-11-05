@@ -117,11 +117,15 @@ export default function PurchaseReceiving({ user }) {
       console.error("Error submitting receiving:", error);
     }
   };
-
-  const filteredReceivings = (receivings || []).filter(r => 
-    (r.GRN_Number && r.GRN_Number.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (r.VendorName && r.VendorName.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredReceivings = (receivings || []).filter(r => {
+    if (!searchTerm) return true; // If search bar is empty, show everything!
+    
+    const safeGRN = r.GRN_Number || '';
+    const safeVendor = r.VendorName || '';
+    
+    return safeGRN.toLowerCase().includes(searchTerm.toLowerCase()) || 
+           safeVendor.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
