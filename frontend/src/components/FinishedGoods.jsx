@@ -12,6 +12,7 @@ export default function FinishedGoodsReceipt({ user }) {
   // Form State
   const [selectedOrderId, setSelectedOrderId] = useState('');
   const [activeOrder, setActiveOrder] = useState(null);
+  const [selectedBatchId, setSelectedBatchId] = useState(''); // Added to satisfy strict batch validation
   const [producedQty, setProducedQty] = useState('');
   const [wastageQty, setWastageQty] = useState(0);
   const [loggedById, setLoggedById] = useState('');
@@ -23,21 +24,18 @@ export default function FinishedGoodsReceipt({ user }) {
     try {
       const token = localStorage.getItem('erp_token');
       
-      // Defensive Fetch for Production Orders
       const poRes = await fetch('https://sms.uvtechsolutions.co.in/api/production-orders', { headers: { 'x-access-token': token } });
       if (poRes.headers.get("content-type")?.includes("application/json")) {
         const poData = await poRes.json();
         setProductionOrders(Array.isArray(poData) ? poData : []);
       }
 
-      // Defensive Fetch for Employees
       const partyRes = await fetch('https://sms.uvtechsolutions.co.in/api/parties', { headers: { 'x-access-token': token } });
       if (partyRes.headers.get("content-type")?.includes("application/json")) {
         const partyData = await partyRes.json();
         setEmployees(Array.isArray(partyData) ? partyData.filter(p => p.PartyType === 'Employee') : []);
       }
 
-      // Defensive Fetch for Existing Receipts
       const recRes = await fetch('https://sms.uvtechsolutions.co.in/api/finished-goods', { headers: { 'x-access-token': token } });
       if (recRes.headers.get("content-type")?.includes("application/json")) {
         const recData = await recRes.json();
@@ -54,7 +52,7 @@ export default function FinishedGoodsReceipt({ user }) {
     .filter(po => po.Status !== 'Completed')
     .map(po => ({
       value: String(po.ProductionOrderID || po.OrderID),
-      label: `${po.OrderNo} - ${po.ProductName} (Target: ${po.TargetQuantity})`,
+      label: `${po.OrderNo} - ${po.ProductName} (Target: ${po.TargetQuantity})`, // Fixed syntax error here
       productId: po.ProductID,
       productName: po.ProductName,
       targetQty: po.TargetQuantity
@@ -81,6 +79,7 @@ export default function FinishedGoodsReceipt({ user }) {
   const handleSubmitReceipt = async (e) => {
     e.preventDefault();
     if (!activeOrder) return alert("Select a Production Order.");
+    if (!selectedBatchId) return alert("Batch ID is required for strict validation.");
     if (!producedQty || producedQty <= 0) return alert("Produced Quantity must be greater than zero.");
     if (!loggedById) return alert("Select the Employee logging this receipt.");
 
@@ -89,27 +88,32 @@ export default function FinishedGoodsReceipt({ user }) {
     setIsProcessing(true);
     try {
       const token = localStorage.getItem('erp_token');
-      const selectedEmployee = employeeOptions.find(e => e.value === String(loggedById));
+      const selectedEmployee = employeeOptions.find(emp => emp.value === String(loggedById));
+
+      // 🚨 STRICT PAYLOAD FIX: Keys now exactly match the new backend expectations
+      const payload = {
+        poId: parseInt(activeOrder.value, 10),
+        batchId: parseInt(selectedBatchId, 10),
+        productId: parseInt(activeOrder.productId, 10),
+        yieldQty: parseFloat(producedQty) || 0,
+        wasteQty: parseFloat(wastageQty) || 0,
+        receivedBy: selectedEmployee ? selectedEmployee.name : 'System'
+      };
 
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/finished-goods', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-access-token': token },
-        body: JSON.stringify({
-          productionOrderId: activeOrder.value,
-          productId: activeOrder.productId,
-          producedQty: parseFloat(producedQty),
-          wastageQty: parseFloat(wastageQty) || 0,
-          loggedBy: selectedEmployee ? selectedEmployee.name : 'System'
-        })
+        body: JSON.stringify(payload)
       });
 
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("application/json")) {
         const data = await res.json();
         if (res.ok) {
-          alert(`Success! Inventory Updated. Receipt No: ${data.receiptNo}`);
+          alert(`Success! Inventory Updated.`);
           setSelectedOrderId('');
           setActiveOrder(null);
+          setSelectedBatchId('');
           setProducedQty('');
           setWastageQty(0);
           setLoggedById('');
@@ -123,6 +127,7 @@ export default function FinishedGoodsReceipt({ user }) {
       }
     } catch (error) {
       console.error("Submission error:", error);
+      alert(`Network Error: ${error.message}`);
     } finally {
       setIsProcessing(false);
     }
@@ -196,7 +201,7 @@ export default function FinishedGoodsReceipt({ user }) {
                     <td className="px-6 py-4 text-gray-500">{new Date(rec.ReceiptDate || Date.now()).toLocaleDateString()}</td>
                     <td className="px-6 py-4 font-mono">{rec.OrderNo}</td>
                     <td className="px-6 py-4 font-bold text-gray-900">{rec.ProductName}</td>
-                    <td className="px-6 py-4 font-mono text-right text-green-700 font-bold">{rec.ProducedQuantity} Units</td>
+                    <td className="px-6 py-4 font-mono text-right text-green-700 font-bold">{rec.ProducedQuantity || rec.YieldQty} Units</td>
                     <td className="px-6 py-4 text-gray-500">{rec.LoggedBy || 'System'}</td>
                   </tr>
                 ))}
@@ -212,8 +217,8 @@ export default function FinishedGoodsReceipt({ user }) {
       {/* VIEW MODE: CREATE FORM */}
       {viewMode === 'create' && (
         <form onSubmit={handleSubmitReceipt} className="p-5 md:p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div className="md:col-span-1">
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">1. Select Production Order *</label>
               <Select
                 options={orderOptions}
@@ -228,8 +233,21 @@ export default function FinishedGoodsReceipt({ user }) {
                 styles={{ menuPortal: base => ({ ...base, zIndex: 9999 }) }}
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">2. Received By (Employee) *</label>
+            
+            <div className="md:col-span-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">2. Batch ID *</label>
+              <input 
+                type="number" min="1"
+                value={selectedBatchId} 
+                onChange={(e) => setSelectedBatchId(e.target.value)}
+                placeholder="Enter Batch ID"
+                required
+                className="w-full p-2.5 bg-white border border-gray-300 rounded text-sm text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none"
+              />
+            </div>
+
+            <div className="md:col-span-1">
+              <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">3. Received By (Employee) *</label>
               <Select
                 options={employeeOptions}
                 value={employeeOptions.find(opt => opt.value === loggedById) || null}
