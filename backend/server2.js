@@ -1331,11 +1331,15 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
         // Uses ProducedQuantity and WastageQuantity to match your DB
         // ---------------------------------------------------------
+        // ---------------------------------------------------------
+        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
+        // Uses QtyProduced to match your DB schema perfectly
+        // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
             .input('batchId', sql.BigInt, batchId) 
             .query(`
                 SELECT 
-                    b.BatchedQty,
+                    b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = @batchId), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
                 WHERE b.BatchID = @batchId
