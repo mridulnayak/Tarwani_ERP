@@ -1303,94 +1303,118 @@ app.get('/api/finished-goods', async (req, res) => {
     }
 });
 
-// POST: Log Finished Goods with Smart Status Check (Partial vs Completed)
-app.post('/api/finished-goods', async (req, res) => {
-    const { productionOrderId, productId, producedQty, wastageQty, loggedBy } = req.body;
 
-    if (!productionOrderId || !productId || producedQty == null || producedQty <= 0) {
-        return res.status(400).json({ error: 'Valid inputs required.' });
-    }
-
-    const pool = await sql.connect(dbConfig);
-    const transaction = new sql.Transaction(pool);
-
+// STRICT FINISHED GOODS RECEIPT (FGR) ROUTE
+app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
+    let transaction;
     try {
-        await transaction.begin(); 
-        const receiptNo = `FGR-${Date.now()}`;
+        // 1. Extract data from frontend payload
+        const poId = parseInt(req.body.poId, 10);
+        const batchId = parseInt(req.body.batchId, 10);
+        const productId = parseInt(req.body.productId, 10);
+        const yieldQty = parseInt(req.body.yieldQty || 0, 10); // Good products
+        const wasteQty = parseInt(req.body.wasteQty || 0, 10); // Defective products
+        const receivedBy = req.body.receivedBy || 'System';
 
-        // 1. Get Target Quantity and current completed quantity for this order
-        const orderCheck = await new sql.Request(transaction)
-            .input('poId', sql.Int, productionOrderId)
-            .query(`
-                SELECT TargetQuantity, ISNULL(Status, 'Pending') as Status 
-                FROM mridul.ProductionOrder 
-                WHERE ProductionOrderID = @poId
-            `);
+        const totalProcessingQty = yieldQty + wasteQty;
 
-        if (orderCheck.recordset.length === 0) {
-            throw new Error('Production Order not found.');
+        if (!poId || !batchId || !productId || totalProcessingQty <= 0) {
+            return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
         }
 
-        const targetQty = orderCheck.recordset[0].TargetQuantity;
+        const pool = await sql.connect(dbConfig);
+        transaction = new sql.Transaction(pool);
+        await transaction.begin();
 
-        // 2. Insert Finished Goods Receipt
-        await new sql.Request(transaction)
-            .input('receiptNo', sql.VarChar, receiptNo)
-            .input('poId', sql.Int, productionOrderId)
-            .input('productId', sql.Int, productId)
-            .input('produced', sql.Float, producedQty)
-            .input('wastage', sql.Float, wastageQty || 0)
-            .input('loggedBy', sql.VarChar, loggedBy || 'System')
+        // ---------------------------------------------------------
+        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
+        // ---------------------------------------------------------
+        const checkResult = await new sql.Request(transaction)
+            .input('batchId', sql.Int, batchId)
             .query(`
-                INSERT INTO mridul.FinishedGoodsReceipt (ReceiptNo, ProductionOrderID, ProductID, ProducedQuantity, WastageQuantity, LoggedBy)
-                VALUES (@receiptNo, @poId, @productId, @produced, @wastage, @loggedBy)
+                SELECT 
+                    b.BatchedQty,
+                    ISNULL((SELECT SUM(YieldQty + WasteQty) FROM mridul.FinishedGoodsReceipt WHERE BatchID = @batchId), 0) AS AlreadyCompletedQty
+                FROM mridul.ProductionBatches b
+                WHERE b.BatchID = @batchId
             `);
 
-        // 3. Update Product Master Closing Balance
-        await new sql.Request(transaction)
-            .input('productId', sql.Int, productId)
-            .input('qty', sql.Float, producedQty)
-            .query(`
-                UPDATE mridul.ProductMaster
-                SET ClosingBalance = ISNULL(ClosingBalance, 0) + @qty
-                WHERE ProductID = @productId
-            `);
-
-        // 4. Calculate total produced so far for this order
-        const sumResult = await new sql.Request(transaction)
-            .input('poId', sql.Int, productionOrderId)
-            .query(`
-                SELECT ISNULL(SUM(ProducedQuantity), 0) as TotalProduced 
-                FROM mridul.FinishedGoodsReceipt 
-                WHERE ProductionOrderID = @poId
-            `);
-
-        const totalProducedSoFar = sumResult.recordset[0].TotalProduced;
-
-        // 5. Update Order Status only if total produced >= target quantity
-        let newStatus = 'Pending';
-        if (totalProducedSoFar >= targetQty) {
-            newStatus = 'Completed';
+        if (checkResult.recordset.length === 0) {
+            throw new Error("Batch not found.");
         }
 
+        const batchedQty = checkResult.recordset[0].BatchedQty;
+        const alreadyCompleted = checkResult.recordset[0].AlreadyCompletedQty;
+        const remainingInBatch = batchedQty - alreadyCompleted;
+
+        if (totalProcessingQty > remainingInBatch) {
+            throw new Error(`Strict Validation Failed: You are trying to receive ${totalProcessingQty} items, but only ${remainingInBatch} items are left in this batch.`);
+        }
+
+        // ---------------------------------------------------------
+        // RULE 2: INSERT FGR RECORD (Tracking Yield vs Waste)
+        // ---------------------------------------------------------
         await new sql.Request(transaction)
-            .input('poId', sql.Int, productionOrderId)
-            .input('status', sql.VarChar, newStatus)
+            .input('poId', sql.Int, poId)
+            .input('batchId', sql.Int, batchId)
+            .input('productId', sql.Int, productId)
+            .input('yieldQty', sql.Int, yieldQty)
+            .input('wasteQty', sql.Int, wasteQty)
+            .input('receivedBy', sql.VarChar, receivedBy)
             .query(`
-                UPDATE mridul.ProductionOrder
-                SET Status = @status
-                WHERE ProductionOrderID = @poId
+                INSERT INTO mridul.FinishedGoodsReceipt (PO_ID, BatchID, ProductID, YieldQty, WasteQty, ReceivedBy, ReceiptDate)
+                VALUES (@poId, @batchId, @productId, @yieldQty, @wasteQty, @receivedBy, GETDATE())
             `);
 
-        await transaction.commit(); 
-        res.status(201).json({ message: 'Success', receiptNo, orderStatus: newStatus });
+        // ---------------------------------------------------------
+        // RULE 3: UPDATE MAIN STOCK (Only Yield goes to stock)
+        // ---------------------------------------------------------
+        if (yieldQty > 0) {
+            await new sql.Request(transaction)
+                .input('productId', sql.Int, productId)
+                .input('yieldQty', sql.Int, yieldQty)
+                .query(`
+                    UPDATE mridul.ProductMaster 
+                    SET ClosingBalance = ISNULL(ClosingBalance, 0) + @yieldQty 
+                    WHERE ProductID = @productId
+                `);
+        }
+
+        // ---------------------------------------------------------
+        // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
+        // ---------------------------------------------------------
+        await new sql.Request(transaction)
+            .input('poId', sql.Int, poId)
+            .query(`
+                DECLARE @TargetQty INT;
+                DECLARE @TotalCompleted INT;
+
+                -- Get the target quantity from the PO
+                SELECT @TargetQty = TargetQty FROM mridul.ProductionOrders WHERE PO_ID = @poId;
+
+                -- Get the total completed across ALL batches for this PO
+                SELECT @TotalCompleted = ISNULL(SUM(YieldQty + WasteQty), 0) FROM mridul.FinishedGoodsReceipt WHERE PO_ID = @poId;
+
+                -- Update Status Dynamically
+                IF @TotalCompleted >= @TargetQty
+                    UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE PO_ID = @poId;
+                ELSE IF @TotalCompleted > 0
+                    UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE PO_ID = @poId;
+                ELSE
+                    UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE PO_ID = @poId;
+            `);
+
+        await transaction.commit();
+        return res.status(201).json({ message: 'Finished Goods received safely, Stock updated, and PO Status checked!' });
+
     } catch (err) {
-        try { await transaction.rollback(); } catch (rollbackErr) {}
-        console.error('Finished Goods Transaction Failed:', err.message);
-        res.status(500).json({ error: err.message });
+        console.error('FGR CRASH:', err.message);
+        if (transaction) {
+            try { await transaction.rollback(); } catch (rollbackErr) { }
+        }
+        return res.status(400).json({ error: err.message });
     }
 });
-
 // ==========================================
 // ISSUAL MANAGEMENT ROUTES
 // ==========================================
