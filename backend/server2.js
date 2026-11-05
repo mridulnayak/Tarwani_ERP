@@ -1312,12 +1312,10 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     try {
         const poId = parseInt(req.body.poId, 10);
         
-        // 🔥 FIX: SMART PREFIX SANITIZER 🔥
-        // Agar string mein 'BTH-' nahi hai, toh automatically add kar do
-        let rawBatchId = String(req.body.batchId).trim();
-        const batchNo = rawBatchId.toUpperCase().startsWith('BTH-') 
-                        ? rawBatchId.toUpperCase() 
-                        : 'BTH-' + rawBatchId;
+        // 🔥 THE ULTIMATE SANITIZER 🔥
+        // Strips any accidental prefixes/spaces so we just have pure numbers (e.g., '1793848532510')
+        const rawNumberString = String(req.body.batchId).replace(/[^0-9]/g, ''); 
+        const formattedBatchNo = 'BTH-' + rawNumberString;
         
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
@@ -1326,39 +1324,35 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         const totalProcessingQty = yieldQty + wasteQty;
 
-        if (!poId || !batchNo || !productId || totalProcessingQty <= 0) {
+        if (!poId || !rawNumberString || !productId || totalProcessingQty <= 0) {
             return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
         }
+        
         const pool = await sql.connect(dbConfig);
         transaction = new sql.Transaction(pool);
         await transaction.begin();
 
         // ---------------------------------------------------------
-        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
-        // Querying by BatchNo instead of BatchID
-        // ---------------------------------------------------------
-// ---------------------------------------------------------
-        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
-        // BULLETPROOFING: Handles hidden spaces AND checks both prefixed/unprefixed values
-        // ---------------------------------------------------------
-// ---------------------------------------------------------
-        // RULE 1: STRICT VALIDATION - Check Batch vs Completed Math
-        // BULLETPROOFING: Handles hidden spaces AND checks both prefixed/unprefixed values
+        // RULE 1: STRICT VALIDATION - OMNI-SEARCH
+        // Searches BatchNo (with and without prefix) AND BatchID
         // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
-            .input('batchNo', sql.VarChar, batchNo) 
+            .input('formattedNo', sql.VarChar, formattedBatchNo)
+            .input('rawIdString', sql.VarChar, rawNumberString) 
             .query(`
                 SELECT 
                     b.BatchID, 
                     b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
-                WHERE LTRIM(RTRIM(b.BatchNo)) = @batchNo 
-                   OR LTRIM(RTRIM(b.BatchNo)) = REPLACE(@batchNo, 'BTH-', '')
+                WHERE b.BatchNo = @formattedNo 
+                   OR b.BatchNo = @rawIdString
+                   OR CAST(b.BatchID AS VARCHAR) = @rawIdString
             `);
 
         if (checkResult.recordset.length === 0) {
-            throw new Error(`Batch number \${batchNo} not found in the database. Please verify the Batch ID.`);
+            // Fixed the template literal syntax here
+            throw new Error(`Batch number ${formattedBatchNo} not found in the database. Please verify the Batch ID.`);
         }
 
         const internalBatchId = checkResult.recordset[0].BatchID;
@@ -1372,7 +1366,6 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
         // ---------------------------------------------------------
         // RULE 2: INSERT FGR RECORD
-        // Use the internalBatchId we just retrieved
         // ---------------------------------------------------------
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
