@@ -1315,19 +1315,14 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         // 🔥 THE ULTIMATE SANITIZER 🔥
         // Strips any accidental prefixes/spaces so we just have pure numbers (e.g., '1793848532510')
         const rawNumberString = String(req.body.batchId).replace(/[^0-9]/g, ''); 
-        const formattedBatchNo = 'BTH-' + rawNumberString;
-        
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
         const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
         const receivedBy = req.body.receivedBy || 'System';
-
         const totalProcessingQty = yieldQty + wasteQty;
-
         if (!poId || !rawNumberString || !productId || totalProcessingQty <= 0) {
             return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
         }
-        
         const pool = await sql.connect(dbConfig);
         transaction = new sql.Transaction(pool);
         await transaction.begin();
@@ -1337,7 +1332,6 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         // Searches BatchNo (with and without prefix) AND BatchID
         // ---------------------------------------------------------
         const checkResult = await new sql.Request(transaction)
-            .input('formattedNo', sql.VarChar, formattedBatchNo)
             .input('rawIdString', sql.VarChar, rawNumberString) 
             .query(`
                 SELECT 
@@ -1345,14 +1339,13 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
                     b.QtyProduced AS BatchedQty, 
                     ISNULL((SELECT SUM(ProducedQuantity + WastageQuantity) FROM mridul.FinishedGoodsReceipt WHERE BatchID = b.BatchID), 0) AS AlreadyCompletedQty
                 FROM mridul.ProductionBatches b
-                WHERE b.BatchNo = @formattedNo 
-                   OR b.BatchNo = @rawIdString
+                -- WILDCARD MATCH: Agar number kahin bhi match hua toh pass
+                WHERE b.BatchNo LIKE '%' + @rawIdString + '%' 
                    OR CAST(b.BatchID AS VARCHAR) = @rawIdString
             `);
 
         if (checkResult.recordset.length === 0) {
-            // Fixed the template literal syntax here
-            throw new Error(`Batch number ${formattedBatchNo} not found in the database. Please verify the Batch ID.`);
+            throw new Error(`Batch number ${rawNumberString} not found in the database. Check if it exists in ProductionBatches.`);
         }
 
         const internalBatchId = checkResult.recordset[0].BatchID;
