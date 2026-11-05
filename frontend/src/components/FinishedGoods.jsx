@@ -90,14 +90,15 @@ export default function FinishedGoodsReceipt({ user }) {
       const token = localStorage.getItem('erp_token');
       const selectedEmployee = employeeOptions.find(emp => emp.value === String(loggedById));
 
-      // 🚨 STRICT PAYLOAD FIX: Keys now exactly match the new backend expectations
+// 🚨 STRICT PAYLOAD FIX
       const payload = {
         poId: parseInt(activeOrder.value, 10),
         batchId: parseInt(selectedBatchId, 10),
         productId: parseInt(activeOrder.productId, 10),
         yieldQty: parseFloat(producedQty) || 0,
         wasteQty: parseFloat(wastageQty) || 0,
-        receivedBy: selectedEmployee ? selectedEmployee.name : 'System'
+        receivedBy: selectedEmployee ? selectedEmployee.name : 'System',
+        targetQty: parseFloat(activeOrder.targetQty) || 0  
       };
 
       const res = await fetch('https://sms.uvtechsolutions.co.in/api/finished-goods', {

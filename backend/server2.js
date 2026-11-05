@@ -1311,9 +1311,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
     let transaction;
     try {
         const poId = parseInt(req.body.poId, 10);
-        
-        // 🔥 THE ULTIMATE SANITIZER 🔥
-        // Strips any accidental prefixes/spaces so we just have pure numbers (e.g., '1793848532510')
+        const targetQty = parseInt(req.body.targetQty, 10);
         const rawNumberString = String(req.body.batchId).replace(/[^0-9]/g, ''); 
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
@@ -1384,31 +1382,29 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         }
 
 
+
         // RULE 4: AUTO-UPDATE PRODUCTION ORDER STATUS
         await new sql.Request(transaction)
             .input('poId', sql.Int, poId)
+            .input('targetQty', sql.Int, targetQty)
             .query(`
-                DECLARE @TargetQty INT;
                 DECLARE @TotalCompleted INT;
 
-                -- Fetch target quantity using the correct column names
-                SELECT @TargetQty = TargetQuantity FROM mridul.ProductionOrders WHERE OrderID = @poId;
-                
-                -- Calculate total completed for this specific production order
-                SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) FROM mridul.FinishedGoodsReceipt WHERE ProductionOrderID = @poId;
+                -- Kitna complete hua hai wo FGR table se nikalenge
+                SELECT @TotalCompleted = ISNULL(SUM(ProducedQuantity + WastageQuantity), 0) 
+                FROM mridul.FinishedGoodsReceipt 
+                WHERE ProductionOrderID = @poId;
 
-                -- Update Status Dynamically
-                IF @TotalCompleted >= @TargetQty
+                -- Exact OrderID use karke status update karenge
+                IF @TotalCompleted >= @targetQty
                     UPDATE mridul.ProductionOrders SET Status = 'Completed' WHERE OrderID = @poId;
                 ELSE IF @TotalCompleted > 0
                     UPDATE mridul.ProductionOrders SET Status = 'Pending' WHERE OrderID = @poId;
                 ELSE
                     UPDATE mridul.ProductionOrders SET Status = 'Raised' WHERE OrderID = @poId;
             `);
-
         await transaction.commit();
         return res.status(201).json({ message: 'Finished Goods received safely, Stock updated, and PO Status checked!' });
-
     } catch (err) {
         console.error('FGR CRASH:', err.message);
         if (transaction) {
