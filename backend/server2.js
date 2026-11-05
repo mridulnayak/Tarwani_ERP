@@ -111,7 +111,7 @@ app.get('/api/users/roles', async (req, res) => {
         const pool = await sql.connect(dbConfig);
         // Exclude passwords from the SELECT statement for security
         const result = await pool.request().query(`
-            SELECT UserID, Username, Role, IsActive
+            SELECT UserID, Username, fullName, Role, IsActive
             FROM mridul.Users
             ORDER BY Role, Username
         `);

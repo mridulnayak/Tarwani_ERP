@@ -80,7 +80,7 @@ export default function RoleAllocation({ user }) {
 
   const filteredUsers = users.filter(u => 
     u.Username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (u.FullName && u.FullName.toLowerCase().includes(searchTerm.toLowerCase()))
+    (u.fullName && u.fullName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const availableRoles = ['Admin', 'Production', 'Store', 'Sales', 'Staff'];
@@ -126,7 +126,7 @@ export default function RoleAllocation({ user }) {
                 <tr key={u.UserID} className="bg-white even:bg-gray-100 hover:bg-yellow-50 transition-colors">
                   <td className="px-4 py-2 font-mono text-gray-600 border-r border-gray-200">{u.UserID}</td>
                   <td className="px-4 py-2 font-bold text-gray-900 border-r border-gray-200">{u.Username}</td>
-                  <td className="px-4 py-2 border-r border-gray-200">{u.FullName || 'N/A'}</td>
+                  <td className="px-4 py-2 border-r border-gray-200">{u.fullName || 'N/A'}</td>
                   
                   <td className="px-4 py-2 border-r border-gray-200">
                     <span className={`px-2.5 py-1 rounded text-xs font-bold ${u.Role === 'Admin' ? 'bg-red-100 text-red-800' : 'bg-blue-100 text-blue-800'}`}>
