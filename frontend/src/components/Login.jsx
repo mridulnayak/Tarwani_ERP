@@ -35,9 +35,14 @@ export default function Login({ onLoginSuccess }) {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 font-sans p-4">
       <div className="w-full max-w-md bg-white p-8 md:p-10 rounded-2xl shadow-xl border border-gray-200">
         
-        <div className="text-center mb-8">
+        {/* UPDATED HEADER: Logo added, Subtitle removed */}
+        <div className="text-center mb-8 flex flex-col items-center">
+          <img 
+            src="/tarwani.png" 
+            alt="Tarwani Soaps Logo" 
+            className="h-24 w-auto object-contain mb-3" 
+          />
           <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">Tarwani Soaps</h1>
-          <p className="text-gray-500 font-medium mt-2">Factory Management System</p>
         </div>
 
         {error && (

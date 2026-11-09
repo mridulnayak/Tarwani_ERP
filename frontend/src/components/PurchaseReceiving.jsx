@@ -53,17 +53,18 @@ export default function PurchaseReceiving({ user }) {
 
   const vendorOptions = vendors.map(v => ({ value: String(v.PartyID), label: v.PartyName }));
   const productOptions = products.map(p => ({ value: String(p.ProductID), label: p.ProductName }));
-  
-  // Format tank options to show available capacity
+
+// Format tank options to show available capacity
   const tankOptions = tanks.map(t => {
-    const availableSpace = (t.MaxCapacity || 0) - (t.CurrentVolume || 0);
+    // 🔥 FIX: Using exact column names returned by the SQL Database
+    const availableSpace = (t.Capacity || 0) - (t.CurrentStock || 0);
+    
     return {
       value: String(t.TankID),
       label: `${t.TankName} (Free Space: ${availableSpace} L)`,
       availableSpace: availableSpace
     };
   });
-
   // --- SEQUENTIAL ITEM ADDITION HANDLERS ---
   const handleAddReceivedItem = () => {
     if (!currentItem.productId) return alert("Please select a raw material.");

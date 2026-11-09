@@ -1,5 +1,9 @@
 {
   "appId": "com.uvtech.tarwanierp",
   "appName": "Tarwani Soaps",
-  "webDir": "dist"
+  "webDir": "dist",
+  "server": {
+    "url": "https://sms.uvtechsolutions.co.in",
+    "cleartext": true
+  }
 }
