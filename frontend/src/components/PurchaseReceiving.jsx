@@ -8,16 +8,13 @@ export default function PurchaseReceiving({ user }) {
   const [tanks, setTanks] = useState([]);
   const [receivings, setReceivings] = useState([]);
 
-  // View Mode: 'list' or 'create'
   const [viewMode, setViewMode] = useState('list');
 
-  // Form State
   const [vendorId, setVendorId] = useState('');
   const [invoiceNo, setInvoiceNo] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   
-  // Sequential Item State
-  const [currentItem, setCurrentItem] = useState({ productId: '', quantity: 1, requiresTank: false, tankId: '' });
+  const [currentItem, setCurrentItem] = useState({ productId: '', quantity: 1, requiresTank: false, tankId: '', isLiquid: false });
   const [receivedItems, setReceivedItems] = useState([]);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -29,7 +26,7 @@ export default function PurchaseReceiving({ user }) {
       const [partyRes, prodRes, tankRes, recRes] = await Promise.all([
         fetch(`${API_BASE_URL}/parties`, { headers: { 'x-access-token': token } }),
         fetch(`${API_BASE_URL}/products`, { headers: { 'x-access-token': token } }),
-        fetch(`${API_BASE_URL}/tanks`, { headers: { 'x-access-token': token } }), // Assuming you have a tanks API
+        fetch(`${API_BASE_URL}/tanks`, { headers: { 'x-access-token': token } }),
         fetch(`${API_BASE_URL}/purchase-receivings`, { headers: { 'x-access-token': token } })
       ]);
 
@@ -54,23 +51,42 @@ export default function PurchaseReceiving({ user }) {
   const vendorOptions = vendors.map(v => ({ value: String(v.PartyID), label: v.PartyName }));
   const productOptions = products.map(p => ({ value: String(p.ProductID), label: p.ProductName }));
 
-// Format tank options to show available capacity
   const tankOptions = tanks.map(t => {
-    // 🔥 FIX: Using exact column names returned by the SQL Database
     const availableSpace = (t.Capacity || 0) - (t.CurrentStock || 0);
-    
     return {
       value: String(t.TankID),
       label: `${t.TankName} (Free Space: ${availableSpace} L)`,
       availableSpace: availableSpace
     };
   });
-  // --- SEQUENTIAL ITEM ADDITION HANDLERS ---
+
+  // --- ERROR-PROOFING: MATERIAL SELECTION LOGIC ---
+  const handleMaterialSelect = (selected) => {
+    const selectedProductId = selected ? selected.value : '';
+    let isLiquidMaterial = false;
+
+    if (selectedProductId) {
+      const productObj = products.find(p => String(p.ProductID) === selectedProductId);
+      
+      // 🔥 FIX: Ensure 'ItemState' matches your actual database column name from the SQL query
+      if (productObj && productObj.ItemState && productObj.ItemState.toLowerCase().includes('liquid')) {
+        isLiquidMaterial = true;
+      }
+    }
+
+    setCurrentItem({
+      ...currentItem,
+      productId: selectedProductId,
+      requiresTank: isLiquidMaterial, // Auto-enable tank selection for liquids
+      isLiquid: isLiquidMaterial,     // Track physical state to disable checkbox for solids
+      tankId: ''
+    });
+  };
+
   const handleAddReceivedItem = () => {
     if (!currentItem.productId) return alert("Please select a raw material.");
     if (currentItem.quantity <= 0) return alert("Quantity must be greater than zero.");
     
-    // 🚨 TANK CAPACITY VALIDATION LOGIC 🚨
     if (currentItem.requiresTank) {
       if (!currentItem.tankId) return alert("Please select a target tank for this liquid material.");
       
@@ -81,15 +97,13 @@ export default function PurchaseReceiving({ user }) {
     }
 
     setReceivedItems([...receivedItems, { ...currentItem }]);
-    // Reset current item box
-    setCurrentItem({ productId: '', quantity: 1, requiresTank: false, tankId: '' });
+    setCurrentItem({ productId: '', quantity: 1, requiresTank: false, tankId: '', isLiquid: false });
   };
 
   const handleRemoveItem = (index) => {
     setReceivedItems(receivedItems.filter((_, i) => i !== index));
   };
 
-  // --- SUBMIT COMPLETE RECEIVING ---
   const handleSubmitReceiving = async (e) => {
     e.preventDefault();
     if (!vendorId) return alert("Please select a vendor.");
@@ -118,12 +132,11 @@ export default function PurchaseReceiving({ user }) {
       console.error("Error submitting receiving:", error);
     }
   };
+
   const filteredReceivings = (receivings || []).filter(r => {
-    if (!searchTerm) return true; // If search bar is empty, show everything!
-    
+    if (!searchTerm) return true; 
     const safeGRN = r.GRN_Number || '';
     const safeVendor = r.VendorName || '';
-    
     return safeGRN.toLowerCase().includes(searchTerm.toLowerCase()) || 
            safeVendor.toLowerCase().includes(searchTerm.toLowerCase());
   });
@@ -131,7 +144,6 @@ export default function PurchaseReceiving({ user }) {
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
       
-      {/* HEADER WITH TOGGLE BUTTONS */}
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Purchase Receiving (GRN)</h2>
@@ -159,7 +171,6 @@ export default function PurchaseReceiving({ user }) {
         </div>
       </div>
 
-      {/* VIEW MODE: LIST */}
       {viewMode === 'list' && (
         <div>
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
@@ -200,7 +211,6 @@ export default function PurchaseReceiving({ user }) {
         </div>
       )}
 
-      {/* VIEW MODE: CREATE FORM */}
       {viewMode === 'create' && (
         <form onSubmit={handleSubmitReceiving} className="p-5 md:p-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -230,7 +240,6 @@ export default function PurchaseReceiving({ user }) {
             </div>
           </div>
 
-          {/* Sequential Material Adder Box */}
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
             <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Add Received Materials (One by One)</h4>
             
@@ -241,7 +250,7 @@ export default function PurchaseReceiving({ user }) {
                 <Select
                   options={productOptions}
                   value={productOptions.find(opt => opt.value === currentItem.productId) || null}
-                  onChange={(selected) => setCurrentItem({ ...currentItem, productId: selected ? selected.value : '' })}
+                  onChange={handleMaterialSelect} // 🔥 NEW LOGIC APPLIED HERE
                   isSearchable
                   className="text-gray-900 text-sm"
                 />
@@ -253,16 +262,16 @@ export default function PurchaseReceiving({ user }) {
                   type="number" min="1"
                   value={currentItem.quantity} 
                   onChange={(e) => setCurrentItem({ ...currentItem, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
-                  className="p-2 bg-gray-50 border border-gray-300 rounded text-sm h-[38px]" // matching react-select height
+                  className="p-2 bg-gray-50 border border-gray-300 rounded text-sm h-[38px]"
                 />
               </div>
 
-              {/* TANK LOGIC TOGGLE */}
               <div className="md:col-span-3 flex flex-col gap-1">
-                <label className="text-xs font-semibold text-gray-400 uppercase flex items-center gap-2">
+                <label className={`text-xs font-semibold uppercase flex items-center gap-2 ${currentItem.isLiquid ? 'text-gray-700' : 'text-gray-400'}`}>
                   <input 
                     type="checkbox" 
                     checked={currentItem.requiresTank}
+                    disabled={!currentItem.isLiquid} // 🔥 DISABLES CHECKBOX IF MATERIAL IS SOLID
                     onChange={(e) => setCurrentItem({ ...currentItem, requiresTank: e.target.checked, tankId: '' })}
                     className="w-3 h-3"
                   />
@@ -274,7 +283,7 @@ export default function PurchaseReceiving({ user }) {
                     value={tankOptions.find(opt => opt.value === currentItem.tankId) || null}
                     onChange={(selected) => setCurrentItem({ ...currentItem, tankId: selected ? selected.value : '' })}
                     placeholder="Select Tank..."
-                    className="text-gray-900 text-sm"
+                    className="text-gray-900 text-sm mt-1"
                   />
                 )}
               </div>
@@ -290,7 +299,6 @@ export default function PurchaseReceiving({ user }) {
               </div>
             </div>
 
-            {/* Received Items Grid Table */}
             <div className="overflow-x-auto bg-white rounded border border-gray-200">
               <table className="w-full text-left text-xs text-gray-700">
                 <thead className="bg-gray-100 uppercase border-b">
