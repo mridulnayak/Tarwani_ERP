@@ -32,27 +32,29 @@ sql.connect(dbConfig).then(() => {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
+const jwt = require('jsonwebtoken');
 
-//AUTH TOKEN ROUTES
+// ==========================================
+// AUTH TOKEN MIDDLEWARE (SECURED)
+// ==========================================
 const authenticateToken = (req, res, next) => {
     // 1. Allow Preflight (CORS)
     if (req.method === 'OPTIONS') return next();
+    
     // 2. Safely check for token
     const token = req.headers['x-access-token'] || req.headers['authorization'];
-    // 3. GOD MODE: If token is missing, DO NOT throw 401. Force login as Admin.
+    
+    // 3. Reject if no token is found
     if (!token) {
-        console.warn("⚠️ Token missing or stripped by IIS. Activating God Mode for:", req.method);
-        req.user = { userId: 999, role: 'Admin', username: 'admin' };
-        return next();
+        return res.status(401).json({ error: "Access Denied. No token provided." });
     }
-    // 4. Verify Token
-    jwt.verify(token.replace('Bearer ', ''), process.env.JWT_SECRET || 'tarwani_super_secret_key_2026', (err, user) => {
+    
+    // 4. Verify Token strictly
+    jwt.verify(token.replace('Bearer ', ''), JWT_SECRET, (err, user) => {
         if (err) {
-            console.warn("⚠️ Token expired. Activating God Mode fallback.");
-            req.user = { userId: 999, role: 'Admin', username: 'admin' };
-            return next();
+            // 🔥 This tells the frontend the session is officially dead
+            return res.status(401).json({ error: "Session expired or invalid. Please log in again." });
         }
-        
         req.user = user;
         next();
     });
@@ -78,18 +80,19 @@ app.post('/api/login', async (req, res) => {
         };
 
         if (demoAccounts[username] && password === demoAccounts[username].password) {
+            // 🔥 Generate token with exactly an 8-Hour lifespan
             const token = jwt.sign(
                 { userId: 999, role: demoAccounts[username].role, username: username }, 
-                process.env.JWT_SECRET || 'tarwani_super_secret_key_2026', 
-                { expiresIn: '12h' }
+                JWT_SECRET, 
+                { expiresIn: '8h' } //change this to change login session time
             );
+            
             return res.status(200).json({
                 message: 'Login successful',
                 token,
                 user: { username: username, role: demoAccounts[username].role }
             });
         }
-        // -----------------------------------------------------
 
         return res.status(401).json({ error: 'Invalid username or password' });
 
@@ -98,7 +101,6 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: 'Internal server error during login' });
     }
 });
-
 
 //to protect all routes
 app.use('/api', authenticateToken);

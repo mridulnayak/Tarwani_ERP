@@ -17,30 +17,64 @@ import UserManagement from './components/UserManagement';
 import ProductionEntry from './components/ProductionEntry';
 import RoleAllocation from './components/RoleAllocation';
 
+// 🔥 Set Session Duration: 8 Hours (in milliseconds)
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; //only change this to chnage login seesion time 
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState('Overview');
   const [user, setUser] = useState(null);
 
+  // --- GLOBAL SESSION WATCHDOG ---
   useEffect(() => {
     const savedUser = localStorage.getItem('erp_user');
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser);
-      setUser(parsedUser);
-      setDefaultTab(parsedUser.role);
+    const loginTime = localStorage.getItem('erp_login_time');
+
+    if (savedUser && loginTime) {
+      const timeElapsed = Date.now() - parseInt(loginTime, 10);
+      
+      // 1. Check on initial load if 8 hours have already passed
+      if (timeElapsed >= SESSION_DURATION_MS) {
+        handleLogout(true); // Force logout
+      } else {
+        // Valid session: Restore user
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        setDefaultTab(parsedUser.role);
+      }
     }
+
+    // 2. Background Timer: Check the clock every 1 minute while app is open
+    const sessionInterval = setInterval(() => {
+      const currentLoginTime = localStorage.getItem('erp_login_time');
+      if (currentLoginTime) {
+        const elapsed = Date.now() - parseInt(currentLoginTime, 10);
+        if (elapsed >= SESSION_DURATION_MS) {
+          handleLogout(true);
+        }
+      }
+    }, 60000); // 60,000 ms = 1 minute
+
+    return () => clearInterval(sessionInterval); // Cleanup timer on unmount
   }, []);
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setDefaultTab(userData.role);
+    // Record the exact millisecond they logged in
+    localStorage.setItem('erp_login_time', Date.now().toString()); 
   };
 
-  const handleLogout = () => {
+  const handleLogout = (autoExpired = false) => {
     localStorage.removeItem('erp_token');
     localStorage.removeItem('erp_user');
+    localStorage.removeItem('erp_login_time');
     setUser(null);
+    
+    if (autoExpired) {
+      alert("Your 8-hour shift session has expired. Please log in again to continue.");
+    }
   };
 
   const setDefaultTab = (role) => {
@@ -53,7 +87,6 @@ export default function App() {
   if (!user) {
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
-
 
   const menuCategories = [
     {
