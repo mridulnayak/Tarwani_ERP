@@ -32,8 +32,6 @@ sql.connect(dbConfig).then(() => {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'tarwani_super_secret_key_2026';
-const jwt = require('jsonwebtoken');
-
 // ==========================================
 // AUTH TOKEN MIDDLEWARE (SECURED)
 // ==========================================
@@ -61,7 +59,7 @@ const authenticateToken = (req, res, next) => {
 };
 
 // ==========================================
-// AUTHENTICATION ROUTES
+// AUTHENTICATION ROUTES (PRODUCTION DB LOGIN)
 // ==========================================
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
@@ -71,29 +69,37 @@ app.post('/api/login', async (req, res) => {
     }
 
     try {
-        // --- TEMPORARY DEMO OVERRIDE FOR PRESENTATION ---
-        const demoAccounts = {
-            'admin': { password: 'admin123', role: 'Admin' },
-            'sales': { password: 'sales123', role: 'Sales' },
-            'store': { password: 'store123', role: 'Store' },
-            'production': { password: 'prod123', role: 'Production' }
-        };
+        const pool = await sql.connect(dbConfig);
+        
+        // Query the actual database for the username and password
+        const result = await pool.request()
+            .input('username', sql.VarChar, username)
+            .input('password', sql.VarChar, password) 
+            .query(`
+                SELECT UserID, Username, Role 
+                FROM mridul.Users 
+                WHERE Username = @username AND Password = @password
+            `);
 
-        if (demoAccounts[username] && password === demoAccounts[username].password) {
-            // 🔥 Generate token with exactly an 8-Hour lifespan
+        // If the database finds a match
+        if (result.recordset.length > 0) {
+            const user = result.recordset[0];
+            
+            // Generate the secure token using actual DB data
             const token = jwt.sign(
-                { userId: 999, role: demoAccounts[username].role, username: username }, 
+                { userId: user.UserID, role: user.Role, username: user.Username }, 
                 JWT_SECRET, 
-                { expiresIn: '8h' } //change this to change login session time
+                { expiresIn: '8h' } // Your 8-hour shift timer
             );
             
             return res.status(200).json({
                 message: 'Login successful',
                 token,
-                user: { username: username, role: demoAccounts[username].role }
+                user: { username: user.Username, role: user.Role }
             });
         }
 
+        // If no match is found in the database
         return res.status(401).json({ error: 'Invalid username or password' });
 
     } catch (err) {
@@ -101,7 +107,6 @@ app.post('/api/login', async (req, res) => {
         res.status(500).json({ error: 'Internal server error during login' });
     }
 });
-
 //to protect all routes
 app.use('/api', authenticateToken);
 // ==========================================
