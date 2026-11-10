@@ -77,11 +77,10 @@ export default function App() {
     }
   };
 
-  const setDefaultTab = (role) => {
-    if (role === 'Admin') { setActiveTab('dashboard'); setExpandedCategory('Overview'); }
-    else if (role === 'Sales') { setActiveTab('sales'); setExpandedCategory('Despatch'); }
-    else if (role === 'Store') { setActiveTab('purchase'); setExpandedCategory('Store & Inventory'); }
-    else if (role === 'Production') { setActiveTab('production'); setExpandedCategory('Production'); }
+const setDefaultTab = (role) => {
+    // Route every login directly to the unified Dashboard router
+    setActiveTab('dashboard'); 
+    setExpandedCategory('Overview');
   };
 
   if (!user) {
@@ -92,7 +91,7 @@ export default function App() {
     {
       title: 'Overview',
       allowedRoles: ['Admin', 'Sales', 'Store', 'Production'],
-      items: [{ id: 'dashboard', label: '📊 Dashboard Overview', roles: ['Admin'] }]
+      items: [{ id: 'dashboard', label: '📊 Dashboard Overview', roles: ['Admin','Sales', 'Store', 'Production'] }]
     },
     {
       title: 'Master Management',
