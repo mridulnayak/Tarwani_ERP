@@ -109,6 +109,48 @@ app.post('/api/login', async (req, res) => {
 });
 //to protect all routes
 app.use('/api', authenticateToken);
+
+// ==========================================
+// DASHBOARD STATS AGGREGATOR
+// ==========================================
+app.get('/api/dashboard/stats', async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const stats = {};
+
+        // 1. Pending Sales Orders (Orders not yet fully dispatched)
+        const salesRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.SalesOrders WHERE Status = 'Pending' OR Status IS NULL`);
+        stats.pendingSales = salesRes.recordset[0].count;
+
+        // 2. Active Production Orders
+        const prodRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.ProductionOrder WHERE Status = 'In Progress'`);
+        stats.activeProduction = prodRes.recordset[0].count;
+
+        // 3. Pending Purchase Orders
+        const poRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.PurchaseOrders WHERE Status = 'Pending'`);
+        stats.pendingPurchases = poRes.recordset[0].count;
+
+        // 4. Low Stock Alerts (Materials where balance is <= 50)
+        const stockRes = await pool.request().query(`
+            SELECT TOP 5 ProductName, ClosingBalance 
+            FROM mridul.ProductMaster 
+            WHERE ClosingBalance <= 50 
+            ORDER BY ClosingBalance ASC
+        `);
+        stats.lowStockItems = stockRes.recordset;
+
+        // Add additional queries here as your database grows (e.g., today's revenue, active tanks)
+        stats.salesToday = 0; // Placeholder for expansion
+        stats.yieldToday = 0; // Placeholder for expansion
+        stats.pendingIssuances = 0; // Placeholder for expansion
+
+        res.status(200).json(stats);
+    } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+        res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
+    }
+});
+
 // ==========================================
 // ROLE ALLOCATION & SECURITY ROUTES
 // ==========================================

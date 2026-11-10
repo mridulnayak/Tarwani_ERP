@@ -1,140 +1,162 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 
 export default function Dashboard({ user }) {
-  const [stats, setStats] = useState({
-    pendingSales: 0,
-    pendingPurchases: 0,
-    activeProduction: 0,
-    lowStockItems: []
-  });
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Fetch unified dashboard stats from backend
   useEffect(() => {
     const fetchStats = async () => {
       try {
         const token = localStorage.getItem('erp_token');
-        const res = await fetch(`${API_BASE_URL}/dashboard-stats`, {
-          method: 'GET',
+        const res = await fetch(`${API_BASE_URL}/dashboard/stats`, {
           headers: { 'x-access-token': token }
         });
         if (res.ok) {
           const data = await res.json();
-          setStats({
-            pendingSales: data.pendingSales ?? 0,
-            pendingPurchases: data.pendingPurchases ?? 0,
-            activeProduction: data.activeProduction ?? 0,
-            lowStockItems: Array.isArray(data.lowStockItems) ? data.lowStockItems : []
-          });
+          setStats(data);
         }
-      } catch (error) {
-        console.error("Error fetching dashboard stats:", error);
+      } catch (err) {
+        console.error("Dashboard fetch error", err);
+      } finally {
+        setLoading(false);
       }
     };
     fetchStats();
   }, []);
 
-  return (
-    <div className="w-full">
+  if (loading) return <div className="p-8 text-center text-gray-500 font-bold">Loading your dashboard...</div>;
+
+  // 1. MASTER ADMIN DASHBOARD (God-Eye View)
+  const AdminDashboard = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">Welcome back, {user.username}</h1>
+        <p className="text-gray-500">Here is the current operational status of Tarwani Soaps.</p>
+      </div>
       
-      {/* WELCOME HEADER */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-black text-gray-900 tracking-tight">
-          Welcome back, {user?.username}
-        </h2>
-        <p className="text-gray-500 mt-1 text-lg">
-          Here is the current operational status of Tarwani Soaps.
-        </p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <StatCard title="PENDING SALES" value={stats?.pendingSales || 0} subtitle="Orders waiting dispatch" color="bg-blue-600" />
+        <StatCard title="ACTIVE PRODUCTION" value={stats?.activeProduction || 0} subtitle="Batches on floor" color="bg-orange-500" />
+        <StatCard title="PENDING PURCHASES" value={stats?.pendingPurchases || 0} subtitle="Inbound material" color="bg-green-600" />
+        <StatCard title="TOTAL REVENUE" value={`₹${stats?.todayRevenue || 0}`} subtitle="Today's Dispatches" color="bg-purple-600" />
       </div>
 
-      {/* KPI CARDS GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        
-        {/* Sales Card */}
-        <div className="bg-blue-600 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-blue-700 transition-colors">
-          <h3 className="text-blue-100 font-semibold uppercase tracking-wider text-sm">Pending Sales</h3>
-          <div className="text-5xl font-black my-4">{stats.pendingSales}</div>
-          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Orders waiting for dispatch</div>
-        </div>
-
-        {/* Production Card */}
-        <div className="bg-orange-500 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-orange-600 transition-colors">
-          <h3 className="text-orange-100 font-semibold uppercase tracking-wider text-sm">Active Production</h3>
-          <div className="text-5xl font-black my-4">{stats.activeProduction}</div>
-          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Batches on the factory floor</div>
-        </div>
-
-        {/* Purchase Card */}
-        <div className="bg-green-600 p-6 rounded-2xl shadow-lg text-white flex flex-col justify-between hover:bg-green-700 transition-colors">
-          <h3 className="text-green-100 font-semibold uppercase tracking-wider text-sm">Pending Purchases</h3>
-          <div className="text-5xl font-black my-4">{stats.pendingPurchases}</div>
-          <div className="text-sm bg-white/20 p-2 rounded-lg backdrop-blur-sm">Inbound raw material deliveries</div>
-        </div>
-
-      </div>
-
-      {/* AUTOMATED ALERTS SECTION */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-        <div className="p-5 border-b border-gray-200 bg-red-50 flex items-center gap-2">
-          <span className="text-xl">⚠️</span>
-          <div>
-            <h3 className="text-lg font-bold text-red-700 tracking-wide">Critical Low Stock Alerts (Finished Goods)</h3>
-            <p className="text-sm text-red-500">The following items have 50 or fewer units remaining in the warehouse.</p>
-          </div>
-        </div>
-        
-        {stats.lowStockItems.length > 0 ? (
-          <div>
-            {/* MOBILE VIEW: Cards */}
-            <div className="md:hidden divide-y divide-gray-200">
-              {(stats.lowStockItems || []).map((item, index) => (
-                <div key={index} className="p-4 bg-white">
-                  <div className="font-bold text-gray-900 text-lg mb-1">{item.ProductName}</div>
-                  <div className="flex justify-between items-center mt-3">
-                    <span className="text-sm text-gray-600">
-                      Balance: <span className="font-black text-red-600 text-lg">{item.ClosingBalance}</span>
-                    </span>
-                    <button className="px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg shadow-sm">
-                      Generate PO
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* DESKTOP VIEW: Table */}
-            <div className="hidden md:block w-full overflow-x-auto">
-              <table className="w-full text-left text-sm text-gray-600">
-                <thead className="text-xs text-gray-700 uppercase bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold">Product Name</th>
-                    <th className="px-6 py-4 font-semibold">Current Balance</th>
-                    <th className="px-6 py-4 font-semibold text-right">Action Required</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200">
-                  {(stats.lowStockItems || []).map((item, index) => (
-                    <tr key={index} className="hover:bg-gray-50 bg-white">
-                      <td className="px-6 py-4 font-bold text-gray-900 text-base">{item.ProductName}</td>
-                      <td className="px-6 py-4 font-black text-red-600 text-xl">{item.ClosingBalance}</td>
-                      <td className="px-6 py-4 text-right">
-                        <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-sm transition-colors">
-                          Generate Production Order
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ) : (
-          <div className="p-8 text-center bg-gray-50 text-green-700 font-bold flex flex-col items-center justify-center gap-2">
-            <span className="text-3xl">✅</span>
-            All finished goods are sufficiently stocked. No urgent action required.
-          </div>
-        )}
-      </div>
-
+      <LowStockAlert items={stats?.lowStockItems || []} />
     </div>
   );
+
+  // 2. SALES TEAM DASHBOARD
+  const SalesDashboard = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">Sales Command Center</h1>
+        <p className="text-gray-500">Track your daily targets and customer dispatches.</p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard title="ORDERS BOOKED TODAY" value={stats?.salesToday || 0} subtitle="New sales orders" color="bg-blue-600" />
+        <StatCard title="READY FOR DISPATCH" value={stats?.pendingSales || 0} subtitle="Awaiting logistics" color="bg-yellow-500" />
+        <StatCard title="MONTHLY TARGET" value="68%" subtitle="₹12L / ₹18L Achieved" color="bg-green-600" />
+      </div>
+    </div>
+  );
+
+  // 3. STORE / INVENTORY DASHBOARD
+  const StoreDashboard = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">Inventory Management</h1>
+        <p className="text-gray-500">Monitor raw materials, tanks, and incoming shipments.</p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard title="PENDING GRN" value={stats?.pendingPurchases || 0} subtitle="Deliveries expected" color="bg-green-600" />
+        <StatCard title="STOCK ISSUANCES" value={stats?.pendingIssuances || 0} subtitle="Requested by Factory" color="bg-orange-500" />
+        <StatCard title="TOTAL TANKS ACTIVE" value={stats?.activeTanks || 3} subtitle="Currently storing liquid" color="bg-blue-600" />
+      </div>
+
+      <LowStockAlert items={stats?.lowStockItems || []} />
+    </div>
+  );
+
+  // 4. PRODUCTION / FACTORY DASHBOARD
+  const ProductionDashboard = () => (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-black text-gray-900">Factory Floor</h1>
+        <p className="text-gray-500">Manage active batches and daily yields.</p>
+      </div>
+      
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard title="ACTIVE BATCHES" value={stats?.activeProduction || 0} subtitle="Currently processing" color="bg-orange-500" />
+        <StatCard title="YIELD TODAY (BOXES)" value={stats?.yieldToday || 0} subtitle="Finished goods created" color="bg-green-600" />
+        <StatCard title="PENDING ISSUANCES" value={stats?.pendingIssuances || 0} subtitle="Waiting on Store" color="bg-blue-600" />
+      </div>
+    </div>
+  );
+
+  // --- REUSABLE UI COMPONENTS ---
+  const StatCard = ({ title, value, subtitle, color }) => (
+    <div className={`${color} rounded-xl p-5 text-white shadow-md flex flex-col justify-between h-32`}>
+      <h3 className="text-xs font-bold uppercase tracking-wider opacity-90">{title}</h3>
+      <div className="text-4xl font-black">{value}</div>
+      <div className="text-xs bg-white bg-opacity-20 py-1 px-2 rounded mt-2 truncate">{subtitle}</div>
+    </div>
+  );
+
+  const LowStockAlert = ({ items }) => (
+    <div className="bg-red-50 border border-red-200 rounded-xl p-5 mt-6 shadow-sm">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-red-600 text-xl">⚠️</span>
+        <div>
+          <h3 className="text-red-800 font-bold">Critical Low Stock Alerts</h3>
+          <p className="text-red-600 text-xs">These items are running dangerously low.</p>
+        </div>
+      </div>
+      
+      {items.length === 0 ? (
+        <p className="text-sm text-green-700 font-bold">All stock levels look healthy!</p>
+      ) : (
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-red-200 text-red-800">
+            <tr><th className="py-2">Material</th><th className="py-2">Current Balance</th><th className="py-2 text-right">Action</th></tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => (
+              <tr key={idx} className="border-b border-red-100 last:border-0">
+                <td className="py-3 font-semibold text-gray-900">{item.ProductName}</td>
+                <td className="py-3 font-bold text-red-600">{item.ClosingBalance}</td>
+                <td className="py-3 text-right">
+                  <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-bold transition-colors">
+                    Order More
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+
+  // --- TRAFFIC CONTROLLER ---
+  // Renders the correct UI based on the user's role string
+  switch (user.role) {
+    case 'Admin':
+    case 'Master Admin':
+      return <AdminDashboard />;
+    case 'Sales':
+    case 'Sales Team':
+      return <SalesDashboard />;
+    case 'Store':
+    case 'Store Manager':
+      return <StoreDashboard />;
+    case 'Production':
+    case 'Factory Floor':
+      return <ProductionDashboard />;
+    default:
+      return <div className="p-8">Unauthorized Role Profile</div>;
+  }
 }
