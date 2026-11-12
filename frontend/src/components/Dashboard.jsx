@@ -47,7 +47,7 @@ export default function Dashboard({ user }) {
     </div>
   );
 
-  // 2. SALES TEAM DASHBOARD
+// 2. SALES TEAM DASHBOARD
   const SalesDashboard = () => (
     <div className="space-y-6">
       <div>
@@ -58,11 +58,18 @@ export default function Dashboard({ user }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard title="ORDERS BOOKED TODAY" value={stats?.salesToday || 0} subtitle="New sales orders" color="bg-blue-600" />
         <StatCard title="READY FOR DISPATCH" value={stats?.pendingSales || 0} subtitle="Awaiting logistics" color="bg-yellow-500" />
-        <StatCard title="MONTHLY TARGET" value="68%" subtitle="₹12L / ₹18L Achieved" color="bg-green-600" />
+        
+        {/* 🔥 FIX: Now using live dynamic data from the backend */}
+        <StatCard 
+            title="MONTHLY TARGET" 
+            value={`${stats?.targetPercentage || 0}%`} 
+            subtitle={`${stats?.achievedFormatted || '₹0L / ₹0L'} Achieved`} 
+            color="bg-green-600" 
+        />
       </div>
     </div>
   );
-
+  
   // 3. STORE / INVENTORY DASHBOARD
   const StoreDashboard = () => (
     <div className="space-y-6">

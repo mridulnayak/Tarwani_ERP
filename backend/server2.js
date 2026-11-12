@@ -118,7 +118,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
         const pool = await sql.connect(dbConfig);
         const stats = {};
 
-        // 1. Pending Sales Orders (Orders not yet fully dispatched)
+        // 1. Pending Sales Orders
         const salesRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.SalesOrders WHERE Status = 'Pending' OR Status IS NULL`);
         stats.pendingSales = salesRes.recordset[0].count;
 
@@ -130,7 +130,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
         const poRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.PurchaseOrders WHERE Status = 'Pending'`);
         stats.pendingPurchases = poRes.recordset[0].count;
 
-        // 4. Low Stock Alerts (Materials where balance is <= 50)
+        // 4. Low Stock Alerts
         const stockRes = await pool.request().query(`
             SELECT TOP 5 ProductName, ClosingBalance 
             FROM mridul.ProductMaster 
@@ -139,10 +139,43 @@ app.get('/api/dashboard/stats', async (req, res) => {
         `);
         stats.lowStockItems = stockRes.recordset;
 
-        // Add additional queries here as your database grows (e.g., today's revenue, active tanks)
-        stats.salesToday = 0; // Placeholder for expansion
-        stats.yieldToday = 0; // Placeholder for expansion
-        stats.pendingIssuances = 0; // Placeholder for expansion
+        // 5. MONTHLY SALES KPI MATH
+        const currentMonthString = new Date().toISOString().slice(0, 7); // Gets 'YYYY-MM'
+
+        // Fetch the Target
+        const targetRes = await pool.request()
+            .input('month', sql.VarChar, currentMonthString)
+            .query(`SELECT TargetAmount FROM mridul.SalesTargets WHERE TargetMonth = @month`);
+        
+        const monthlyTarget = targetRes.recordset.length > 0 ? targetRes.recordset[0].TargetAmount : 1; 
+
+        // Fetch Actual Sales & Calculate (Wrapped in try/catch in case columns are missing)
+        try {
+            const salesAchievedRes = await pool.request()
+                .input('monthPattern', sql.VarChar, currentMonthString + '%')
+                .query(`
+                    SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
+                    FROM mridul.SalesOrders 
+                    WHERE OrderDate LIKE @monthPattern
+                `);
+            
+            const achievedAmount = salesAchievedRes.recordset[0].Achieved;
+
+            let percentage = Math.round((achievedAmount / monthlyTarget) * 100);
+            if (percentage > 100) percentage = 100; // Cap visual progress bar at 100%
+
+            stats.targetPercentage = percentage;
+            stats.achievedFormatted = `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
+        } catch (err) {
+            console.warn("KPI check failed. Ensure TotalAmount and OrderDate exist in mridul.SalesOrders");
+            stats.targetPercentage = 0;
+            stats.achievedFormatted = `₹0L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
+        }
+
+        // Placeholders for future expansion
+        stats.salesToday = 0; 
+        stats.yieldToday = 0; 
+        stats.pendingIssuances = 0; 
 
         res.status(200).json(stats);
     } catch (err) {
