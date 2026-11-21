@@ -151,7 +151,16 @@ const setDefaultTab = (role) => {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'dashboard': return <Dashboard user={user} />;
+      case 'dashboard': 
+  return (
+    <Dashboard 
+      user={user} 
+      onNavigate={(tabId, category) => {
+        setActiveTab(tabId);
+        if (category) setExpandedCategory(category);
+      }} 
+    />
+  );
       case 'users': return <UserManagement user={user} />;
       case 'roles': return <RoleAllocation user={user} />; // Added Route
       case 'party': return <PartyMaster user={user} />;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../config';
 
-export default function Dashboard({ user }) {
+export default function Dashboard({ user, onNavigate }) {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -136,9 +136,12 @@ export default function Dashboard({ user }) {
                 <td className="py-3 font-semibold text-gray-900">{item.ProductName}</td>
                 <td className="py-3 font-bold text-red-600">{item.ClosingBalance}</td>
                 <td className="py-3 text-right">
-                  <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-bold transition-colors">
-                    Order More
-                  </button>
+<button 
+  onClick={() => onNavigate && onNavigate('purchase', 'Store & Inventory')}
+  className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-bold transition-colors"
+>
+  Order More
+</button>
                 </td>
               </tr>
             ))}

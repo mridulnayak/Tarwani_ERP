@@ -145,11 +145,11 @@ app.get('/api/dashboard/stats', async (req, res) => {
         );
 
         // 3. Pending Purchase Orders
-        const poRes = await safeQuery(
-            'pendingPurchases',
-            `SELECT COUNT(*) as count FROM mridul.PurchaseOrders WHERE Status = 'Pending'`
-        );
-
+// 3. Pending Purchase Orders
+const poRes = await safeQuery(
+    'pendingPurchases',
+    `SELECT COUNT(*) as count FROM mridul.PurchaseOrderHeader WHERE Status = 'Pending'`
+);
         // 4. Low Stock Alerts
         const stockRes = await safeQuery(
             'lowStockItems',
