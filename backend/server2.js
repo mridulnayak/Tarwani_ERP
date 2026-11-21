@@ -149,31 +149,42 @@ app.get('/api/dashboard/stats', async (req, res) => {
         
         const monthlyTarget = targetRes.recordset.length > 0 ? targetRes.recordset[0].TargetAmount : 1; 
 
-        // Fetch Actual Sales & Calculate (Wrapped in try/catch in case columns are missing)
+// Fetch Actual Sales & Today's Activity
         try {
-            const salesAchievedRes = await pool.request()
-                .input('monthPattern', sql.VarChar, currentMonthString + '%')
-                .query(`
-                    SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
-                    FROM mridul.SalesOrders 
-                    WHERE OrderDate LIKE @monthPattern
-                `);
-            
-            const achievedAmount = salesAchievedRes.recordset[0].Achieved;
+            // 1. Monthly Achieved Revenue (Proper MSSQL DATETIME check)
+            const salesAchievedRes = await pool.request().query(`
+                SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
+                FROM mridul.SalesOrders 
+                WHERE YEAR(OrderDate) = YEAR(GETDATE()) 
+                  AND MONTH(OrderDate) = MONTH(GETDATE())
+            `);
 
+            // 2. Today's Orders & Revenue (Single query for both Sales & Admin dashboards)
+            const todaySalesRes = await pool.request().query(`
+                SELECT 
+                    COUNT(*) as TodayCount,
+                    ISNULL(SUM(TotalAmount), 0) as TodayRevenue
+                FROM mridul.SalesOrders 
+                WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE)
+            `);
+
+            const achievedAmount = salesAchievedRes.recordset[0].Achieved;
             let percentage = Math.round((achievedAmount / monthlyTarget) * 100);
             if (percentage > 100) percentage = 100; // Cap visual progress bar at 100%
 
             stats.targetPercentage = percentage;
             stats.achievedFormatted = `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
+            stats.salesToday = todaySalesRes.recordset[0].TodayCount;
+            stats.todayRevenue = todaySalesRes.recordset[0].TodayRevenue;
         } catch (err) {
-            console.warn("KPI check failed. Ensure TotalAmount and OrderDate exist in mridul.SalesOrders");
+            console.warn("KPI check failed:", err.message);
             stats.targetPercentage = 0;
-            stats.achievedFormatted = `₹0L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
+            stats.achievedFormatted = `₹0.00L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
+            stats.salesToday = 0;
+            stats.todayRevenue = 0;
         }
 
         // Placeholders for future expansion
-        stats.salesToday = 0; 
         stats.yieldToday = 0; 
         stats.pendingIssuances = 0; 
 
