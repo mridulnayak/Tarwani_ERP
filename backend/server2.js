@@ -111,87 +111,99 @@ app.post('/api/login', async (req, res) => {
 app.use('/api', authenticateToken);
 
 // ==========================================
-// DASHBOARD STATS AGGREGATOR
+// DASHBOARD STATS AGGREGATOR (RESILIENT)
 // ==========================================
 app.get('/api/dashboard/stats', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const stats = {};
+        const debugErrors = [];
+
+        // Helper: Runs a query safely without crashing the whole dashboard
+        const safeQuery = async (label, queryStr, fallback = null, inputs = []) => {
+            try {
+                const request = pool.request();
+                inputs.forEach(({ name, type, value }) => request.input(name, type, value));
+                const result = await request.query(queryStr);
+                return result.recordset;
+            } catch (err) {
+                console.warn(`⚠️ Dashboard query failed [${label}]:`, err.message);
+                debugErrors.push(`${label}: ${err.message}`);
+                return fallback;
+            }
+        };
 
         // 1. Pending Sales Orders
-        const salesRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.SalesOrders WHERE Status = 'Pending' OR Status IS NULL`);
-        stats.pendingSales = salesRes.recordset[0].count;
+        const salesRes = await safeQuery(
+            'pendingSales',
+            `SELECT COUNT(*) as count FROM mridul.SalesOrders WHERE Status = 'Pending' OR Status IS NULL`
+        );
 
         // 2. Active Production Orders
-        const prodRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.ProductionOrder WHERE Status = 'In Progress'`);
-        stats.activeProduction = prodRes.recordset[0].count;
+        const prodRes = await safeQuery(
+            'activeProduction',
+            `SELECT COUNT(*) as count FROM mridul.ProductionOrder WHERE Status = 'In Progress'`
+        );
 
         // 3. Pending Purchase Orders
-        const poRes = await pool.request().query(`SELECT COUNT(*) as count FROM mridul.PurchaseOrders WHERE Status = 'Pending'`);
-        stats.pendingPurchases = poRes.recordset[0].count;
+        const poRes = await safeQuery(
+            'pendingPurchases',
+            `SELECT COUNT(*) as count FROM mridul.PurchaseOrders WHERE Status = 'Pending'`
+        );
 
         // 4. Low Stock Alerts
-        const stockRes = await pool.request().query(`
-            SELECT TOP 5 ProductName, ClosingBalance 
-            FROM mridul.ProductMaster 
-            WHERE ClosingBalance <= 50 
-            ORDER BY ClosingBalance ASC
-        `);
-        stats.lowStockItems = stockRes.recordset;
+        const stockRes = await safeQuery(
+            'lowStockItems',
+            `SELECT TOP 5 ProductName, ClosingBalance FROM mridul.ProductMaster WHERE ClosingBalance <= 50 ORDER BY ClosingBalance ASC`,
+            []
+        );
 
-        // 5. MONTHLY SALES KPI MATH
-        const currentMonthString = new Date().toISOString().slice(0, 7); // Gets 'YYYY-MM'
+        // 5. Monthly Sales Target
+        const currentMonthString = new Date().toISOString().slice(0, 7);
+        const targetRes = await safeQuery(
+            'monthlyTarget',
+            `SELECT TargetAmount FROM mridul.SalesTargets WHERE TargetMonth = @month`,
+            [],
+            [{ name: 'month', type: sql.VarChar, value: currentMonthString }]
+        );
+        const monthlyTarget = targetRes && targetRes.length > 0 ? targetRes[0].TargetAmount : 1;
 
-        // Fetch the Target
-        const targetRes = await pool.request()
-            .input('month', sql.VarChar, currentMonthString)
-            .query(`SELECT TargetAmount FROM mridul.SalesTargets WHERE TargetMonth = @month`);
-        
-        const monthlyTarget = targetRes.recordset.length > 0 ? targetRes.recordset[0].TargetAmount : 1; 
+        // 6. Monthly Achieved Revenue
+        const achievedRes = await safeQuery(
+            'monthlyAchieved',
+            `SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
+             FROM mridul.SalesOrders 
+             WHERE YEAR(OrderDate) = YEAR(GETDATE()) AND MONTH(OrderDate) = MONTH(GETDATE())`
+        );
+        const achievedAmount = achievedRes ? achievedRes[0].Achieved : 0;
 
-// Fetch Actual Sales & Today's Activity
-        try {
-            // 1. Monthly Achieved Revenue (Proper MSSQL DATETIME check)
-            const salesAchievedRes = await pool.request().query(`
-                SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
-                FROM mridul.SalesOrders 
-                WHERE YEAR(OrderDate) = YEAR(GETDATE()) 
-                  AND MONTH(OrderDate) = MONTH(GETDATE())
-            `);
+        // 7. Today's Sales & Revenue
+        const todaySalesRes = await safeQuery(
+            'todaySales',
+            `SELECT COUNT(*) as TodayCount, ISNULL(SUM(TotalAmount), 0) as TodayRevenue 
+             FROM mridul.SalesOrders 
+             WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE)`
+        );
 
-            // 2. Today's Orders & Revenue (Single query for both Sales & Admin dashboards)
-            const todaySalesRes = await pool.request().query(`
-                SELECT 
-                    COUNT(*) as TodayCount,
-                    ISNULL(SUM(TotalAmount), 0) as TodayRevenue
-                FROM mridul.SalesOrders 
-                WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE)
-            `);
+        let percentage = monthlyTarget > 1 ? Math.round((achievedAmount / monthlyTarget) * 100) : 0;
+        if (percentage > 100) percentage = 100;
 
-            const achievedAmount = salesAchievedRes.recordset[0].Achieved;
-            let percentage = Math.round((achievedAmount / monthlyTarget) * 100);
-            if (percentage > 100) percentage = 100; // Cap visual progress bar at 100%
+        res.status(200).json({
+            pendingSales: salesRes ? salesRes[0].count : 0,
+            activeProduction: prodRes ? prodRes[0].count : 0,
+            pendingPurchases: poRes ? poRes[0].count : 0,
+            lowStockItems: stockRes || [],
+            targetPercentage: percentage,
+            achievedFormatted: `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`,
+            salesToday: todaySalesRes ? todaySalesRes[0].TodayCount : 0,
+            todayRevenue: todaySalesRes ? todaySalesRes[0].TodayRevenue : 0,
+            yieldToday: 0,
+            pendingIssuances: 0,
+            _debugErrors: debugErrors // Tells you exactly which table/column failed
+        });
 
-            stats.targetPercentage = percentage;
-            stats.achievedFormatted = `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
-            stats.salesToday = todaySalesRes.recordset[0].TodayCount;
-            stats.todayRevenue = todaySalesRes.recordset[0].TodayRevenue;
-        } catch (err) {
-            console.warn("KPI check failed:", err.message);
-            stats.targetPercentage = 0;
-            stats.achievedFormatted = `₹0.00L / ₹${(monthlyTarget / 100000).toFixed(2)}L`;
-            stats.salesToday = 0;
-            stats.todayRevenue = 0;
-        }
-
-        // Placeholders for future expansion
-        stats.yieldToday = 0; 
-        stats.pendingIssuances = 0; 
-
-        res.status(200).json(stats);
     } catch (err) {
-        console.error('Error fetching dashboard stats:', err);
-        res.status(500).json({ error: 'Failed to fetch dashboard statistics' });
+        console.error('CRITICAL Dashboard Error:', err);
+        res.status(500).json({ error: 'Database connection failed', details: err.message });
     }
 });
 
