@@ -111,14 +111,64 @@ app.post('/api/login', async (req, res) => {
 app.use('/api', authenticateToken);
 
 // ==========================================
+// ADMIN: SET OR UPDATE MONTHLY SALES TARGET
+// ==========================================
+app.post('/api/dashboard/target', async (req, res) => {
+    // 1. Role-Based Authorization Check
+    if (req.user.role !== 'Admin' && req.user.role !== 'Master Admin') {
+        return res.status(403).json({ error: 'Forbidden: Only Admins can set monthly targets.' });
+    }
+
+    const { targetMonth, targetAmount } = req.body;
+
+    // 2. Input Validation
+    if (!targetMonth || !/^\d{4}-\d{2}$/.test(targetMonth)) {
+        return res.status(400).json({ error: 'Invalid month format. Expected YYYY-MM.' });
+    }
+    const parsedAmount = Number(targetAmount);
+    if (!parsedAmount || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'Target amount must be a positive number.' });
+    }
+
+    try {
+        const pool = await sql.connect(dbConfig);
+
+        // 3. Atomic UPSERT (Update if month exists, otherwise Insert)
+        await pool.request()
+            .input('month', sql.VarChar(7), targetMonth)
+            .input('amount', sql.Decimal(18, 2), parsedAmount)
+            .query(`
+                IF EXISTS (SELECT 1 FROM mridul.SalesTargets WHERE TargetMonth = @month)
+                BEGIN
+                    UPDATE mridul.SalesTargets
+                    SET TargetAmount = @amount
+                    WHERE TargetMonth = @month
+                END
+                ELSE
+                BEGIN
+                    INSERT INTO mridul.SalesTargets (TargetMonth, TargetAmount)
+                    VALUES (@month, @amount)
+                END
+            `);
+
+        res.status(200).json({
+            message: `Monthly target for ${targetMonth} updated successfully.`,
+            targetMonth,
+            targetAmount: parsedAmount
+        });
+    } catch (err) {
+        console.error('Error saving monthly target:', err);
+        res.status(500).json({ error: 'Failed to save monthly target.' });
+    }
+});
+
+// ==========================================
 // DASHBOARD STATS AGGREGATOR (RESILIENT)
 // ==========================================
 app.get('/api/dashboard/stats', async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
-        const debugErrors = [];
 
-        // Helper: Runs a query safely without crashing the whole dashboard
         const safeQuery = async (label, queryStr, fallback = null, inputs = []) => {
             try {
                 const request = pool.request();
@@ -127,33 +177,41 @@ app.get('/api/dashboard/stats', async (req, res) => {
                 return result.recordset;
             } catch (err) {
                 console.warn(`⚠️ Dashboard query failed [${label}]:`, err.message);
-                debugErrors.push(`${label}: ${err.message}`);
                 return fallback;
             }
         };
 
-        // 1. Pending Sales Orders
+        // 1. Pending Sales Orders (Fixed: SalesOrderHeader)
         const salesRes = await safeQuery(
             'pendingSales',
-            `SELECT COUNT(*) as count FROM mridul.SalesOrders WHERE Status = 'Pending' OR Status IS NULL`
+            `SELECT COUNT(*) as count 
+             FROM mridul.SalesOrderHeader 
+             WHERE Status = 'Pending' OR Status IS NULL`
         );
 
         // 2. Active Production Orders
         const prodRes = await safeQuery(
             'activeProduction',
-            `SELECT COUNT(*) as count FROM mridul.ProductionOrder WHERE Status = 'In Progress'`
+            `SELECT COUNT(*) as count 
+             FROM mridul.ProductionOrder 
+             WHERE Status = 'In Progress'`
         );
 
         // 3. Pending Purchase Orders
-// 3. Pending Purchase Orders
-const poRes = await safeQuery(
-    'pendingPurchases',
-    `SELECT COUNT(*) as count FROM mridul.PurchaseOrderHeader WHERE Status = 'Pending'`
-);
+        const poRes = await safeQuery(
+            'pendingPurchases',
+            `SELECT COUNT(*) as count 
+             FROM mridul.PurchaseOrderHeader 
+             WHERE Status = 'Pending'`
+        );
+
         // 4. Low Stock Alerts
         const stockRes = await safeQuery(
             'lowStockItems',
-            `SELECT TOP 5 ProductName, ClosingBalance FROM mridul.ProductMaster WHERE ClosingBalance <= 50 ORDER BY ClosingBalance ASC`,
+            `SELECT TOP 5 ProductName, ClosingBalance 
+             FROM mridul.ProductMaster 
+             WHERE ClosingBalance <= 50 
+             ORDER BY ClosingBalance ASC`,
             []
         );
 
@@ -165,26 +223,31 @@ const poRes = await safeQuery(
             [],
             [{ name: 'month', type: sql.VarChar, value: currentMonthString }]
         );
-        const monthlyTarget = targetRes && targetRes.length > 0 ? targetRes[0].TargetAmount : 1;
+        const monthlyTarget = targetRes && targetRes.length > 0 ? Number(targetRes[0].TargetAmount) : 0;
 
-        // 6. Monthly Achieved Revenue
+        // 6. Monthly Achieved Revenue (Fixed: Header + Details Join)
         const achievedRes = await safeQuery(
             'monthlyAchieved',
-            `SELECT ISNULL(SUM(TotalAmount), 0) as Achieved 
-             FROM mridul.SalesOrders 
-             WHERE YEAR(OrderDate) = YEAR(GETDATE()) AND MONTH(OrderDate) = MONTH(GETDATE())`
+            `SELECT ISNULL(SUM(d.Quantity * d.Rate), 0) as Achieved 
+             FROM mridul.SalesOrderHeader h
+             INNER JOIN mridul.SalesOrderDetails d ON h.SO_ID = d.SO_ID
+             WHERE YEAR(h.OrderDate) = YEAR(GETDATE()) 
+               AND MONTH(h.OrderDate) = MONTH(GETDATE())`
         );
-        const achievedAmount = achievedRes ? achievedRes[0].Achieved : 0;
+        const achievedAmount = achievedRes ? Number(achievedRes[0].Achieved) : 0;
 
-        // 7. Today's Sales & Revenue
+        // 7. Today's Sales & Revenue (Fixed: DISTINCT Order Count + Line Item Sum)
         const todaySalesRes = await safeQuery(
             'todaySales',
-            `SELECT COUNT(*) as TodayCount, ISNULL(SUM(TotalAmount), 0) as TodayRevenue 
-             FROM mridul.SalesOrders 
-             WHERE CAST(OrderDate AS DATE) = CAST(GETDATE() AS DATE)`
+            `SELECT 
+                COUNT(DISTINCT h.SO_ID) as TodayCount, 
+                ISNULL(SUM(d.Quantity * d.Rate), 0) as TodayRevenue 
+             FROM mridul.SalesOrderHeader h
+             LEFT JOIN mridul.SalesOrderDetails d ON h.SO_ID = d.SO_ID
+             WHERE CAST(h.OrderDate AS DATE) = CAST(GETDATE() AS DATE)`
         );
 
-        let percentage = monthlyTarget > 1 ? Math.round((achievedAmount / monthlyTarget) * 100) : 0;
+        let percentage = monthlyTarget > 0 ? Math.round((achievedAmount / monthlyTarget) * 100) : 0;
         if (percentage > 100) percentage = 100;
 
         res.status(200).json({
@@ -192,13 +255,13 @@ const poRes = await safeQuery(
             activeProduction: prodRes ? prodRes[0].count : 0,
             pendingPurchases: poRes ? poRes[0].count : 0,
             lowStockItems: stockRes || [],
+            monthlyTarget,
             targetPercentage: percentage,
             achievedFormatted: `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`,
             salesToday: todaySalesRes ? todaySalesRes[0].TodayCount : 0,
-            todayRevenue: todaySalesRes ? todaySalesRes[0].TodayRevenue : 0,
+            todayRevenue: todaySalesRes ? Number(todaySalesRes[0].TodayRevenue) : 0,
             yieldToday: 0,
-            pendingIssuances: 0,
-            _debugErrors: debugErrors // Tells you exactly which table/column failed
+            pendingIssuances: 0
         });
 
     } catch (err) {
