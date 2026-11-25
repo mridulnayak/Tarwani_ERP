@@ -91,16 +91,15 @@ app.post('/api/login', async (req, res) => {
             return res.status(403).json({ error: 'Account is deactivated. Contact Admin.' });
         }
 
-        // 2. Verify password (bcrypt first, legacy plaintext fallback)
+// 2. Verify password (bcrypt first, then safe fallback to legacy Password)
         let isPasswordValid = false;
-        if (user.PasswordHash) {
-            isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
-        } else if (user.Password) {
-            isPasswordValid = (password === user.Password);
+
+        if (user.PasswordHash && user.PasswordHash.trim().startsWith('$2')) {
+            isPasswordValid = await bcrypt.compare(password, user.PasswordHash.trim());
         }
 
-        if (!isPasswordValid) {
-            return res.status(401).json({ error: 'Invalid username or password' });
+        if (!isPasswordValid && user.Password) {
+            isPasswordValid = (password === user.Password.trim());
         }
 
         // 3. Issue 8-hour JWT
