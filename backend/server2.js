@@ -217,7 +217,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
             'activeProduction',
             `SELECT COUNT(*) as count 
              FROM mridul.ProductionOrder 
-             WHERE Status = 'In Progress'`
+             WHERE Status IS NULL OR Status <> 'Completed'`
         );
 
         // 3. Pending Purchase Orders
@@ -270,6 +270,30 @@ app.get('/api/dashboard/stats', async (req, res) => {
              WHERE CAST(h.OrderDate AS DATE) = CAST(GETDATE() AS DATE)`
         );
 
+        // 8. Active Tanks (Tanks currently holding liquid stock)
+        const tanksRes = await safeQuery(
+            'activeTanks',
+            `SELECT COUNT(*) as count 
+             FROM mridul.TankMaster 
+             WHERE ISNULL(CurrentStock, 0) > 0`
+        );
+
+        // 9. Today's Production Yield (Finished Goods Received Today)
+        const yieldRes = await safeQuery(
+            'yieldToday',
+            `SELECT ISNULL(SUM(ProducedQuantity), 0) as YieldToday 
+             FROM mridul.FinishedGoodsReceipt 
+             WHERE CAST(ReceiptDate AS DATE) = CAST(GETDATE() AS DATE)`
+        );
+
+        // 10. Today's Stock Issuances (Materials Issued to Factory Today)
+        const issualRes = await safeQuery(
+            'pendingIssuances',
+            `SELECT COUNT(*) as count 
+             FROM mridul.IssualHeader 
+             WHERE CAST(IssueDate AS DATE) = CAST(GETDATE() AS DATE)`
+        );
+
         let percentage = monthlyTarget > 0 ? Math.round((achievedAmount / monthlyTarget) * 100) : 0;
         if (percentage > 100) percentage = 100;
 
@@ -283,8 +307,9 @@ app.get('/api/dashboard/stats', async (req, res) => {
             achievedFormatted: `₹${(achievedAmount / 100000).toFixed(2)}L / ₹${(monthlyTarget / 100000).toFixed(2)}L`,
             salesToday: todaySalesRes ? todaySalesRes[0].TodayCount : 0,
             todayRevenue: todaySalesRes ? Number(todaySalesRes[0].TodayRevenue) : 0,
-            yieldToday: 0,
-            pendingIssuances: 0
+            activeTanks: tanksRes ? tanksRes[0].count : 0,
+            yieldToday: yieldRes ? Number(yieldRes[0].YieldToday) : 0,
+            pendingIssuances: issualRes ? issualRes[0].count : 0
         });
 
     } catch (err) {

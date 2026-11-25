@@ -213,8 +213,8 @@ export default function Dashboard({ user, onNavigate }) {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard title="PENDING GRN" value={stats?.pendingPurchases || 0} subtitle="Deliveries expected" color="bg-green-600" />
-        <StatCard title="STOCK ISSUANCES" value={stats?.pendingIssuances || 0} subtitle="Requested by Factory" color="bg-orange-500" />
-        <StatCard title="TOTAL TANKS ACTIVE" value={stats?.activeTanks || 3} subtitle="Currently storing liquid" color="bg-blue-600" />
+        <StatCard title="STOCK ISSUANCES TODAY" value={stats?.pendingIssuances || 0} subtitle="Issued to Factory" color="bg-orange-500" />
+        <StatCard title="TOTAL TANKS ACTIVE" value={stats?.activeTanks || 0} subtitle="Currently storing liquid" color="bg-blue-600" />
       </div>
 
       <LowStockAlert items={stats?.lowStockItems || []} onNavigate={onNavigate} />
@@ -232,7 +232,7 @@ export default function Dashboard({ user, onNavigate }) {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard title="ACTIVE BATCHES" value={stats?.activeProduction || 0} subtitle="Currently processing" color="bg-orange-500" />
         <StatCard title="YIELD TODAY (BOXES)" value={stats?.yieldToday || 0} subtitle="Finished goods created" color="bg-green-600" />
-        <StatCard title="PENDING ISSUANCES" value={stats?.pendingIssuances || 0} subtitle="Waiting on Store" color="bg-blue-600" />
+        <StatCard title="ISSUANCES TODAY" value={stats?.pendingIssuances || 0} subtitle="Materials received from Store" color="bg-blue-600" />
       </div>
     </div>
   );
