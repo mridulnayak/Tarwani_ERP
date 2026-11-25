@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import Select from 'react-select';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { API_BASE_URL } from '../config';
 
 export default function SalesDispatch({ user }) {
@@ -15,7 +17,7 @@ export default function SalesDispatch({ user }) {
   const [receivedById, setReceivedById] = useState('');
   const [vehicleNo, setVehicleNo] = useState('');
   const [remarks, setRemarks] = useState('');
-  
+
   // Sequential Items Loaded for Delivery
   const [dispatchItems, setDispatchItems] = useState([]);
   const [currentProduct, setCurrentProduct] = useState({ productId: '', quantity: 1 });
@@ -26,7 +28,7 @@ export default function SalesDispatch({ user }) {
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('erp_token');
-      
+
       const soRes = await fetch(`${API_BASE_URL}/sales-orders`, {
         headers: { 'x-access-token': token }
       });
@@ -51,7 +53,7 @@ export default function SalesDispatch({ user }) {
 
   useEffect(() => { fetchData(); }, []);
 
-const handleSalesOrderChange = async (soId) => {
+  const handleSalesOrderChange = async (soId) => {
     setSelectedSoId(soId);
     setDispatchItems([]);
     if (!soId) {
@@ -64,16 +66,14 @@ const handleSalesOrderChange = async (soId) => {
       const res = await fetch(`${API_BASE_URL}/sales-orders/${soId}/dispatch-items-v2`, {
         headers: { 'x-access-token': token }
       });
-      
+
       const data = await res.json();
 
-      // 🚨 AGAR BACKEND CRASH HUA TOH EXACT ERROR SCREEN PAR AAYEGA 🚨
       if (!res.ok) {
-          alert(`Backend Error: ${data.error}`);
-          return;
+        alert(`Backend Error: ${data.error}`);
+        return;
       }
 
-      console.log("🔥 FETCHED SO ITEMS:", data); 
       setSoItemsList(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error fetching SO items:", err);
@@ -91,7 +91,6 @@ const handleSalesOrderChange = async (soId) => {
     label: `${emp.PartyName} (${emp.DesignationName || 'Staff'})`
   }));
 
-  // Foolproof mapping that strips undefined data automatically
   const productOptions = (soItemsList || []).map((item, index) => {
     const pId = item.ProductID || item.productId || item.id || item.ItemID;
     const pName = item.ProductName || item.productName || item.ItemName || 'Unknown Product';
@@ -127,23 +126,23 @@ const handleSalesOrderChange = async (soId) => {
 
     try {
       const token = localStorage.getItem('erp_token');
-      
-      const payload = { 
-        soId: parseInt(selectedSoId, 10), 
-        dispatchedBy: receivedById,       
-        vehicleNumber: vehicleNo,         
-        remarks: remarks, 
+
+      const payload = {
+        soId: parseInt(selectedSoId, 10),
+        dispatchedBy: receivedById,
+        vehicleNumber: vehicleNo,
+        remarks: remarks,
         items: dispatchItems.map(item => ({
-             productId: parseInt(item.productId, 10), 
-             quantity: parseInt(item.quantity, 10)    
+          productId: parseInt(item.productId, 10),
+          quantity: parseInt(item.quantity, 10)
         }))
       };
 
       const res = await fetch(`${API_BASE_URL}/sales-dispatches`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'x-access-token': token 
+          'x-access-token': token
         },
         body: JSON.stringify(payload)
       });
@@ -169,28 +168,112 @@ const handleSalesOrderChange = async (soId) => {
     }
   };
 
-// 🚨 FIXED FILTER LOGIC: Uses actual backend columns and defaults to true if search is empty
+  // --- GENERATE DELIVERY CHALLAN / GATE PASS PDF (NO PRICES) ---
+  const generateDeliveryChallan = (d) => {
+    const challanNo = d.DispatchNo || `DC-${d.DispatchID}`;
+    const dispatchDate = new Date(d.DispatchDate || Date.now()).toLocaleDateString('en-IN');
+
+    // Fallback to salesOrders list if backend hasn't been restarted with CustomerName join
+    const matchedSO = salesOrders.find(so => so.SONumber === d.SONumber);
+    const customerName = d.CustomerName || matchedSO?.CustomerName || 'Valued Customer';
+    const customerAddress = d.CustomerAddress || '';
+    const customerPhone = d.CustomerPhone || '';
+    const vehicle = d.VehicleNo || d.VehicleNumber || 'N/A';
+    const dispatchedBy = d.ReceivedByName || d.DispatchedBy || 'System';
+
+    const doc = new jsPDF();
+
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(30, 64, 175);
+    doc.text("TARWANI SOAPS", 105, 18, { align: "center" });
+
+    doc.setFontSize(11);
+    doc.setTextColor(80, 80, 80);
+    doc.text("DELIVERY CHALLAN / GATE PASS (NOT FOR SALE)", 105, 25, { align: "center" });
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 29, 196, 29);
+
+    // Metadata Grid (Left: Consignee, Right: Logistics)
+    doc.setFontSize(10);
+    doc.setTextColor(30, 30, 30);
+
+    doc.setFont(undefined, 'bold');
+    doc.text("CONSIGNEE / DELIVER TO:", 14, 38);
+    doc.setFont(undefined, 'normal');
+    doc.text(customerName, 14, 44);
+    if (customerAddress) doc.text(customerAddress, 14, 50, { maxWidth: 95 });
+    if (customerPhone) doc.text(`Phone: ${customerPhone}`, 14, customerAddress ? 58 : 50);
+
+    doc.setFont(undefined, 'bold');
+    doc.text(`Challan No:`, 125, 38);
+    doc.text(`Dispatch Date:`, 125, 44);
+    doc.text(`Sales Order Ref:`, 125, 50);
+    doc.text(`Vehicle No:`, 125, 56);
+    doc.text(`Dispatched By:`, 125, 62);
+
+    doc.setFont(undefined, 'normal');
+    doc.text(challanNo, 158, 38);
+    doc.text(dispatchDate, 158, 44);
+    doc.text(d.SONumber || 'N/A', 158, 50);
+    doc.text(vehicle, 158, 56);
+    doc.text(String(dispatchedBy), 158, 62);
+
+    // Items Table (Quantities Only — No Pricing)
+    autoTable(doc, {
+      startY: 72,
+      headStyles: { fillColor: [30, 64, 175], textColor: [255, 255, 255] },
+      head: [['S.No', 'Product Description', 'Dispatched Qty', 'Remarks']],
+      body: [[
+        '1',
+        d.ProductName || 'Finished Goods',
+        `${d.DispatchedQty || 0} Units`,
+        'Checked & Loaded'
+      ]],
+      theme: 'grid',
+    });
+
+    // Declaration & 3-Part Signature Block (Gate Pass + POD)
+    const finalY = doc.lastAutoTable.finalY + 14;
+    doc.setFontSize(9);
+    doc.setTextColor(90, 90, 90);
+    doc.text("Received the above goods in good order and condition.", 14, finalY);
+
+    const sigY = finalY + 26;
+    doc.setDrawColor(120, 120, 120);
+    doc.line(14, sigY, 62, sigY);
+    doc.line(80, sigY, 128, sigY);
+    doc.line(146, sigY, 196, sigY);
+
+    doc.setFontSize(9);
+    doc.setTextColor(40, 40, 40);
+    doc.text("Dispatched By (Store)", 38, sigY + 5, { align: "center" });
+    doc.text("Driver / Transporter", 104, sigY + 5, { align: "center" });
+    doc.text("Receiver's Signature (POD)", 171, sigY + 5, { align: "center" });
+
+    doc.save(`Delivery_Challan_${challanNo}.pdf`);
+  };
+
   const filteredDispatches = (dispatches || []).filter(d => {
-    if (!searchTerm) return true; // Shows all records immediately when search is empty
-    
+    if (!searchTerm) return true;
+
     const term = searchTerm.toLowerCase();
-    
-    // Safely check against the exact keys returned by the backend
     const matchID = d.DispatchID && String(d.DispatchID).includes(term);
     const matchSO = d.SONumber && String(d.SONumber).toLowerCase().includes(term);
     const matchVehicle = d.VehicleNumber && String(d.VehicleNumber).toLowerCase().includes(term);
     const matchUser = d.DispatchedBy && String(d.DispatchedBy).toLowerCase().includes(term);
-    
-    return matchID || matchSO || matchVehicle || matchUser;
+    const matchCustomer = d.CustomerName && String(d.CustomerName).toLowerCase().includes(term);
+
+    return matchID || matchSO || matchVehicle || matchUser || matchCustomer;
   });
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-8">
-      
+
       <div className="p-5 border-b border-gray-200 bg-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h2 className="text-lg font-bold text-gray-800 uppercase tracking-wide">Daily Dispatch Management</h2>
-          <p className="text-sm text-gray-500 mt-1">Record outbound shipments, link delivery personnel, and track trucks.</p>
+          <p className="text-sm text-gray-500 mt-1">Record outbound shipments, link delivery personnel, and generate Delivery Challans.</p>
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto">
           <button
@@ -218,9 +301,9 @@ const handleSalesOrderChange = async (soId) => {
         <div>
           <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
             <h3 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Existing Dispatch Records</h3>
-            <input 
-              type="text" 
-              placeholder="Search dispatches..." 
+            <input
+              type="text"
+              placeholder="Search dispatches..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full md:w-1/3 p-2 bg-white border border-gray-300 rounded-lg text-sm"
@@ -234,41 +317,42 @@ const handleSalesOrderChange = async (soId) => {
                   <th className="px-6 py-4 font-semibold">Dispatch No</th>
                   <th className="px-6 py-4 font-semibold">Date</th>
                   <th className="px-6 py-4 font-semibold">Customer / SO</th>
-                  <th className="px-6 py-4 font-semibold">Received By</th>
+                  <th className="px-6 py-4 font-semibold">Dispatched By</th>
                   <th className="px-6 py-4 font-semibold">Vehicle No</th>
+                  <th className="px-6 py-4 font-semibold text-right">Challan</th>
                 </tr>
               </thead>
-<tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-200">
                 {filteredDispatches.map((d, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50 bg-white">
-                    {/* Fallback to DispatchID if DispatchNo isn't available from backend */}
+                  <tr key={d.DispatchID || idx} className="hover:bg-gray-50 bg-white">
                     <td className="px-6 py-4 font-bold text-blue-600">
-                      {d.DispatchNo || d.DispatchID ? `DSP-${d.DispatchID}` : `DSP-00${idx+1}`}
+                      {d.DispatchNo || (d.DispatchID ? `DSP-${d.DispatchID}` : `DSP-00${idx + 1}`)}
                     </td>
-                    
-                    {/* Ensure Date renders safely */}
                     <td className="px-6 py-4 text-gray-500">
                       {new Date(d.DispatchDate || Date.now()).toLocaleDateString()}
                     </td>
-                    
-                    {/* Fallback to SONumber if CustomerName isn't returned by the join */}
                     <td className="px-6 py-4 font-bold text-gray-900">
-                        {d.CustomerName || d.SONumber || 'N/A'}
+                      {d.CustomerName ? `${d.CustomerName} (${d.SONumber})` : (d.SONumber || 'N/A')}
                     </td>
-                    
-                    {/* Match the exact key returned by the backend (DispatchedBy) */}
                     <td className="px-6 py-4">
-                        {d.ReceivedByName || d.DispatchedBy || 'System'}
+                      {d.ReceivedByName || d.DispatchedBy || 'System'}
                     </td>
-                    
-                    {/* Match the exact key returned by the backend (VehicleNumber) */}
                     <td className="px-6 py-4 font-mono">
-                        {d.VehicleNo || d.VehicleNumber || 'N/A'}
+                      {d.VehicleNo || d.VehicleNumber || 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => generateDeliveryChallan(d)}
+                        className="px-3 py-1.5 bg-gray-800 hover:bg-gray-900 text-white text-xs font-bold rounded transition-colors inline-flex items-center gap-1"
+                      >
+                        <span>🖨️</span> Challan
+                      </button>
                     </td>
                   </tr>
                 ))}
                 {filteredDispatches.length === 0 && (
-                  <tr><td colSpan="5" className="px-6 py-8 text-center text-gray-500">No dispatch records found.</td></tr>
+                  <tr><td colSpan="6" className="px-6 py-8 text-center text-gray-500">No dispatch records found.</td></tr>
                 )}
               </tbody>
             </table>
@@ -310,9 +394,9 @@ const handleSalesOrderChange = async (soId) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Vehicle Number</label>
-              <input 
-                type="text" 
-                value={vehicleNo} 
+              <input
+                type="text"
+                value={vehicleNo}
                 onChange={(e) => setVehicleNo(e.target.value)}
                 placeholder="e.g. CG-04-AB-1234"
                 className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-900"
@@ -320,9 +404,9 @@ const handleSalesOrderChange = async (soId) => {
             </div>
             <div>
               <label className="text-xs font-semibold text-gray-500 uppercase mb-1 block">Remarks / Notes</label>
-              <input 
-                type="text" 
-                value={remarks} 
+              <input
+                type="text"
+                value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder="Optional notes..."
                 className="w-full p-2.5 bg-gray-50 border border-gray-300 rounded text-sm text-gray-900"
@@ -332,7 +416,7 @@ const handleSalesOrderChange = async (soId) => {
 
           <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-6">
             <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Load Items for Delivery (Sequential)</h4>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end bg-white p-3 rounded-lg border border-gray-200 shadow-sm mb-4">
               <div className="md:col-span-8 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Product from Order</label>
@@ -350,17 +434,17 @@ const handleSalesOrderChange = async (soId) => {
 
               <div className="md:col-span-2 flex flex-col gap-1">
                 <label className="text-xs font-semibold text-gray-400 uppercase">Dispatch Qty</label>
-                <input 
+                <input
                   type="number" min="1"
-                  value={currentProduct.quantity} 
+                  value={currentProduct.quantity}
                   onChange={(e) => setCurrentProduct({ ...currentProduct, quantity: Math.max(1, parseInt(e.target.value) || 1) })}
                   className="p-2 bg-gray-50 border border-gray-300 rounded text-sm"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={handleAddDispatchItem}
                   className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-xs shadow"
                 >
@@ -399,8 +483,8 @@ const handleSalesOrderChange = async (soId) => {
             </div>
           </div>
 
-          <button 
-            type="submit" 
+          <button
+            type="submit"
             disabled={dispatchItems.length === 0}
             className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold rounded-xl shadow text-base"
           >

@@ -2066,10 +2066,15 @@ app.get(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
         const result = await pool.request().query(`
             SELECT TOP 50 
                 d.DispatchID, d.DispatchDate, d.DispatchedQty, d.VehicleNumber, d.DispatchedBy,
-                so.SONumber, ISNULL(p.ProductName, 'Unknown Product') AS ProductName
+                so.SONumber, 
+                ISNULL(p.ProductName, 'Unknown Product') AS ProductName,
+                ISNULL(c.PartyName, 'Customer') AS CustomerName,
+                ISNULL(c.Address, '') AS CustomerAddress,
+                ISNULL(c.ContactNumber, '') AS CustomerPhone
             FROM mridul.SalesDispatch d
             INNER JOIN mridul.SalesOrderHeader so ON d.SO_ID = so.SO_ID
             INNER JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+            LEFT JOIN mridul.PartyMaster c ON so.CustomerID = c.PartyID
             ORDER BY d.DispatchDate DESC
         `);
         
