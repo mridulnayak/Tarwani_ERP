@@ -70,37 +70,51 @@ app.post('/api/login', async (req, res) => {
 
     try {
         const pool = await sql.connect(dbConfig);
-        
-        // Query the actual database for the username and password
+
+        // Fetch user by username only (never compare passwords in SQL)
         const result = await pool.request()
             .input('username', sql.VarChar, username)
-            .input('password', sql.VarChar, password) 
             .query(`
-                SELECT UserID, Username, Role 
+                SELECT UserID, Username, Role, Password, PasswordHash, IsActive
                 FROM mridul.Users 
-                WHERE Username = @username AND Password = @password
+                WHERE Username = @username
             `);
 
-        // If the database finds a match
-        if (result.recordset.length > 0) {
-            const user = result.recordset[0];
-            
-            // Generate the secure token using actual DB data
-            const token = jwt.sign(
-                { userId: user.UserID, role: user.Role, username: user.Username }, 
-                JWT_SECRET, 
-                { expiresIn: '8h' } // Your 8-hour shift timer
-            );
-            
-            return res.status(200).json({
-                message: 'Login successful',
-                token,
-                user: { username: user.Username, role: user.Role }
-            });
+        if (result.recordset.length === 0) {
+            return res.status(401).json({ error: 'Invalid username or password' });
         }
 
-        // If no match is found in the database
-        return res.status(401).json({ error: 'Invalid username or password' });
+        const user = result.recordset[0];
+
+        // 1. Block deactivated accounts
+        if (user.IsActive === false || user.IsActive === 0) {
+            return res.status(403).json({ error: 'Account is deactivated. Contact Admin.' });
+        }
+
+        // 2. Verify password (bcrypt first, legacy plaintext fallback)
+        let isPasswordValid = false;
+        if (user.PasswordHash) {
+            isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
+        } else if (user.Password) {
+            isPasswordValid = (password === user.Password);
+        }
+
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+
+        // 3. Issue 8-hour JWT
+        const token = jwt.sign(
+            { userId: user.UserID, role: user.Role, username: user.Username },
+            JWT_SECRET,
+            { expiresIn: '8h' }
+        );
+
+        return res.status(200).json({
+            message: 'Login successful',
+            token,
+            user: { username: user.Username, role: user.Role }
+        });
 
     } catch (err) {
         console.error('Login Error:', err);
@@ -109,6 +123,16 @@ app.post('/api/login', async (req, res) => {
 });
 //to protect all routes
 app.use('/api', authenticateToken);
+
+// ==========================================
+// ADMIN AUTHORIZATION MIDDLEWARE
+// ==========================================
+const requireAdmin = (req, res, next) => {
+    if (!req.user || (req.user.role !== 'Admin' && req.user.role !== 'Master Admin')) {
+        return res.status(403).json({ error: 'Forbidden: Admin access required.' });
+    }
+    next();
+};
 
 // ==========================================
 // ADMIN: SET OR UPDATE MONTHLY SALES TARGET
@@ -274,7 +298,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // ROLE ALLOCATION & SECURITY ROUTES
 // ==========================================
 // Fetch all system users
-app.get('/api/users/roles', async (req, res) => {
+app.get('/api/users/roles', requireAdmin, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         // Exclude passwords from the SELECT statement for security
@@ -291,7 +315,7 @@ app.get('/api/users/roles', async (req, res) => {
 });
 
 // Update a specific user's role (POST Tunneling bypass)
-app.post('/api/users/roles/edit/:id', async (req, res) => {
+app.post('/api/users/roles/edit/:id', requireAdmin, async (req, res) => {
     try {
         const { id } = req.params;
         const { newRole } = req.body;
@@ -326,7 +350,7 @@ app.post('/api/users/roles/edit/:id', async (req, res) => {
 // ==========================================
 
 // 1. POST: Create a New Employee Account
-app.post('/api/users', async (req, res) => {
+app.post('/api/users', requireAdmin, async (req, res) => {
     const { username, password, role, fullName } = req.body;
 
     if (!username || !password || !role || !fullName) {
@@ -360,7 +384,7 @@ app.post('/api/users', async (req, res) => {
 });
 
 // 2. GET: Fetch all active users (excluding passwords for security)
-app.get('/api/users', async (req, res) => {
+app.get('/api/users', requireAdmin, async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request().query(`
@@ -376,7 +400,7 @@ app.get('/api/users', async (req, res) => {
 });
 
 // 3. PUT: Toggle User Active Status (Soft Delete)
-app.post('/api/users/toggle-status/:id', async (req, res) => {
+app.post('/api/users/toggle-status/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { isActive } = req.body;
 
