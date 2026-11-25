@@ -101,7 +101,9 @@ app.post('/api/login', async (req, res) => {
         if (!isPasswordValid && user.Password) {
             isPasswordValid = (password === user.Password.trim());
         }
-
+        if (!isPasswordValid) {
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
         // 3. Issue 8-hour JWT
         const token = jwt.sign(
             { userId: user.UserID, role: user.Role, username: user.Username },
@@ -1193,6 +1195,7 @@ app.post('/api/purchase-orders/delete/:id', async (req, res) => {
 
 // 1. POST: Process Received Goods (GRN), Update Inventory & Tank Stock
 app.post('/api/purchase-receivings', async (req, res) => {
+    const receivedBy = req.user ? req.user.username : 'System';
     const { vendorId, invoiceNo, vehicleNo, items } = req.body;
 
     if (!vendorId || !items || items.length === 0) {
@@ -1225,11 +1228,12 @@ app.post('/api/purchase-receivings', async (req, res) => {
                 .input('qty', sql.Int, safeQty) 
                 .input('invoiceNo', sql.VarChar, invoiceNo || '')
                 .input('vehicleNo', sql.VarChar, vehicleNo || '')
+                .input('receivedBy', sql.VarChar, receivedBy)
                 .query(`
                     INSERT INTO mridul.PurchaseReceiving 
                     (GRN_Number, VendorID, ProductID, TankID, ReceivedQty, InvoiceNo, VehicleNo, ReceiptDate, ReceivedBy)
                     VALUES 
-                    (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE(), 'Admin')
+                    (@grn, @vendorId, @productId, @tankId, @qty, @invoiceNo, @vehicleNo, GETDATE(), @receivedBy)
                 `);
 
             // Step 2: Update Main Warehouse Inventory
@@ -1571,7 +1575,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
         const productId = parseInt(req.body.productId, 10);
         const yieldQty = parseInt(req.body.yieldQty || 0, 10); 
         const wasteQty = parseInt(req.body.wasteQty || 0, 10); 
-        const receivedBy = req.body.receivedBy || 'System';
+        const receivedBy = (req.user && req.user.username) || req.body.receivedBy || 'System';
         const totalProcessingQty = yieldQty + wasteQty;
         if (!poId || !rawNumberString || !productId || totalProcessingQty <= 0) {
             return res.status(400).json({ error: "Invalid data. Must include PO, Batch, Product, and a valid quantity." });
@@ -1682,6 +1686,7 @@ app.post(['/api/finished-goods', '/api/fgr'], async (req, res) => {
 
 // 1. POST: Issue Materials to a Department
 app.post('/api/stock-issuances', async (req, res) => {
+    const issuedBy = req.user ? req.user.username : 'System';
     // We now capture 'department' exactly as the React payload sends it
     const { department, items } = req.body; 
 
@@ -1701,10 +1706,11 @@ app.post('/api/stock-issuances', async (req, res) => {
         const headerResult = await new sql.Request(transaction)
             .input('issueNum', sql.VarChar, issueNumber)
             .input('department', sql.VarChar, department)
+            .input('issuedBy', sql.VarChar, issuedBy)
             .query(`
                 INSERT INTO mridul.IssualHeader (IssueNumber, Department, IssueDate, IssuedBy)
                 OUTPUT INSERTED.IssueID
-                VALUES (@issueNum, @department, GETDATE(), 'Admin')
+                VALUES (@issueNum, @department, GETDATE(), @issuedBy)
             `);
         
         const newIssueId = headerResult.recordset[0].IssueID;
@@ -1970,7 +1976,7 @@ app.post(['/api/sales-dispatch', '/api/sales-dispatches'], async (req, res) => {
     try {
         const soId = parseInt(req.body.soId || req.body.SO_ID || req.body.salesOrderId, 10);
         const vehicleNumber = req.body.vehicleNumber || req.body.vehicleNo || req.body.vehicle || 'N/A';
-        const dispatchedBy = req.body.dispatchedBy || req.body.userName || req.body.loggedBy || 'System';
+        const dispatchedBy = (req.user && req.user.username) || req.body.dispatchedBy || 'System';
         const rawItems = req.body.items || req.body.dispatchItems;
 
         if (!soId || isNaN(soId)) {
