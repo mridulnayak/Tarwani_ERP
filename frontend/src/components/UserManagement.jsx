@@ -36,14 +36,18 @@ export default function UserManagement() {
     { value: 'Production', label: 'Factory Floor' }
   ];
 
-  const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username || !password || !role || !fullName) return alert("All fields are required.");
 
     try {
+      const token = localStorage.getItem('erp_token');
       const res = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-access-token': token
+        },
         body: JSON.stringify({ username, password, role, fullName })
       });
       
@@ -63,7 +67,6 @@ export default function UserManagement() {
       console.error("Error creating user:", error);
     }
   };
-
   const toggleUserStatus = async (userId, currentStatus) => {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'deactivate' : 'reactivate'} this account?`)) return;
 
