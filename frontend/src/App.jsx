@@ -16,9 +16,10 @@ import Dashboard from './components/Dashboard';
 import UserManagement from './components/UserManagement';
 import ProductionEntry from './components/ProductionEntry';
 import RoleAllocation from './components/RoleAllocation';
+import Reports from './components/Reports';
 
 // 🔥 Set Session Duration: 8 Hours (in milliseconds)
-const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; //only change this to chnage login seesion time 
+const SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('');
@@ -36,9 +37,8 @@ export default function App() {
       
       // 1. Check on initial load if 8 hours have already passed
       if (timeElapsed >= SESSION_DURATION_MS) {
-        handleLogout(true); // Force logout
+        handleLogout(true);
       } else {
-        // Valid session: Restore user
         const parsedUser = JSON.parse(savedUser);
         setUser(parsedUser);
         setDefaultTab(parsedUser.role);
@@ -54,15 +54,14 @@ export default function App() {
           handleLogout(true);
         }
       }
-    }, 60000); // 60,000 ms = 1 minute
+    }, 60000);
 
-    return () => clearInterval(sessionInterval); // Cleanup timer on unmount
+    return () => clearInterval(sessionInterval);
   }, []);
 
   const handleLoginSuccess = (userData) => {
     setUser(userData);
     setDefaultTab(userData.role);
-    // Record the exact millisecond they logged in
     localStorage.setItem('erp_login_time', Date.now().toString()); 
   };
 
@@ -77,8 +76,7 @@ export default function App() {
     }
   };
 
-const setDefaultTab = (role) => {
-    // Route every login directly to the unified Dashboard router
+  const setDefaultTab = (role) => {
     setActiveTab('dashboard'); 
     setExpandedCategory('Overview');
   };
@@ -91,7 +89,10 @@ const setDefaultTab = (role) => {
     {
       title: 'Overview',
       allowedRoles: ['Admin', 'Sales', 'Store', 'Production'],
-      items: [{ id: 'dashboard', label: '📊 Dashboard Overview', roles: ['Admin','Sales', 'Store', 'Production'] }]
+      items: [
+        { id: 'dashboard', label: '📊 Dashboard Overview', roles: ['Admin', 'Sales', 'Store', 'Production'] },
+        { id: 'reports', label: '📈 Reports & Exports', roles: ['Admin', 'Sales', 'Store', 'Production'] }
+      ]
     },
     {
       title: 'Master Management',
@@ -104,7 +105,6 @@ const setDefaultTab = (role) => {
       ]
     },
     {
-      // Separated Tank Management as requested
       title: 'Tank Management',
       allowedRoles: ['Admin', 'Store'],
       items: [
@@ -116,7 +116,6 @@ const setDefaultTab = (role) => {
       allowedRoles: ['Admin', 'Production'],
       items: [
         { id: 'production', label: 'Production Orders', roles: ['Admin', 'Production'] },
-        // Added the new Production Entry component here
         { id: 'production_entry', label: 'Production Batch Entry', roles: ['Admin', 'Production'] },
         { id: 'finished', label: 'Finished Goods Receipt', roles: ['Admin', 'Production'] },
       ]
@@ -143,7 +142,6 @@ const setDefaultTab = (role) => {
       allowedRoles: ['Admin'],
       items: [
         { id: 'users', label: 'User Registration', roles: ['Admin'] },
-        // Added the new Role Allocation component here
         { id: 'roles', label: 'Role Allocation', roles: ['Admin'] }
       ]
     }
@@ -152,17 +150,18 @@ const setDefaultTab = (role) => {
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard': 
-  return (
-    <Dashboard 
-      user={user} 
-      onNavigate={(tabId, category) => {
-        setActiveTab(tabId);
-        if (category) setExpandedCategory(category);
-      }} 
-    />
-  );
+        return (
+          <Dashboard 
+            user={user} 
+            onNavigate={(tabId, category) => {
+              setActiveTab(tabId);
+              if (category) setExpandedCategory(category);
+            }} 
+          />
+        );
+      case 'reports': return <Reports user={user} />;
       case 'users': return <UserManagement user={user} />;
-      case 'roles': return <RoleAllocation user={user} />; // Added Route
+      case 'roles': return <RoleAllocation user={user} />;
       case 'party': return <PartyMaster user={user} />;
       case 'designation': return <DesignationMaster user={user} />;
       case 'brand': return <BrandMaster user={user} />;
@@ -171,7 +170,7 @@ const setDefaultTab = (role) => {
       case 'purchase': return <PurchaseOrder user={user} />;
       case 'receiving': return <PurchaseReceiving user={user} />;
       case 'production': return <ProductionOrder user={user} />;
-      case 'production_entry': return <ProductionEntry user={user} />; // Added Route
+      case 'production_entry': return <ProductionEntry user={user} />;
       case 'issual': return <IssualManagement user={user} />;
       case 'finished': return <FinishedGoods user={user} />;
       case 'sales': return <SalesOrder user={user} />;
@@ -185,10 +184,10 @@ const setDefaultTab = (role) => {
     setIsMobileMenuOpen(false);
   };
 
-return (
+  return (
     <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
       
-      {/* MOBILE TOP BAR (Enlarged Logo, Text Removed) */}
+      {/* MOBILE TOP BAR */}
       <div className="md:hidden fixed top-0 left-0 w-full h-16 bg-blue-700 text-white flex items-center justify-between px-4 z-50 shadow-md">
         <div className="flex items-center">
           <img 
@@ -205,11 +204,12 @@ return (
           {isMobileMenuOpen ? '✕' : '☰'}
         </button>
       </div>
-{/* SIDEBAR (Desktop) */}
+
+      {/* SIDEBAR (Desktop) */}
       <aside className={`absolute md:relative top-0 left-0 h-full w-72 bg-gray-900 text-gray-300 flex flex-col z-40 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none
         ${isMobileMenuOpen ? 'translate-x-0 pt-16' : '-translate-x-full md:translate-x-0'}
       `}>
-        {/* DESKTOP HEADER (Enlarged Logo, Text Removed, Role Preserved) */}
+        {/* DESKTOP HEADER */}
         <div className="hidden md:flex flex-col items-center justify-center p-6 bg-gray-950 border-b border-gray-800 text-center">
           <img 
             src="/tarwani.png" 
@@ -258,10 +258,10 @@ return (
           })}
         </nav>
 
-{/* LOGOUT BUTTON */}
+        {/* LOGOUT BUTTON */}
         <div className="p-4 border-t border-gray-800 bg-gray-950">
           <button 
-            onClick={handleLogout}
+            onClick={() => handleLogout(false)}
             className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-md transition-colors"
           >
             Log Out
@@ -269,7 +269,7 @@ return (
         </div>
       </aside>
 
-{/* MOBILE BACKDROP OVERLAY */}
+      {/* MOBILE BACKDROP OVERLAY */}
       {isMobileMenuOpen && (
         <div 
           className="fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"
@@ -277,7 +277,7 @@ return (
         ></div>
       )}
 
-{/* MAIN CONTENT AREA */}
+      {/* MAIN CONTENT AREA */}
       <main className="flex-1 h-full pt-16 md:pt-0 overflow-y-auto bg-gray-100">
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {renderContent()}

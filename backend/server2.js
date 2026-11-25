@@ -321,6 +321,117 @@ app.get('/api/dashboard/stats', async (req, res) => {
 });
 
 // ==========================================
+// REPORTS & ANALYTICS API (FOR EXCEL / CSV)
+// ==========================================
+app.get('/api/reports/:type', async (req, res) => {
+    const { type } = req.params;
+    const { from, to } = req.query;
+
+    // Default date range: start of current month to today
+    const today = new Date().toISOString().slice(0, 10);
+    const firstOfMonth = `${today.slice(0, 7)}-01`;
+    const fromDate = from || firstOfMonth;
+    const toDate = to || today;
+
+    try {
+        const pool = await sql.connect(dbConfig);
+        const request = pool.request()
+            .input('fromDate', sql.Date, fromDate)
+            .input('toDate', sql.Date, toDate);
+
+        let query = '';
+
+        switch (type) {
+            case 'sales':
+                query = `
+                    SELECT 
+                        h.SONumber AS [SO Number],
+                        CONVERT(VARCHAR(10), h.OrderDate, 120) AS [Order Date],
+                        ISNULL(c.PartyName, 'Unknown') AS [Customer],
+                        ISNULL(p.ProductName, 'Unknown') AS [Product],
+                        d.Quantity AS [Qty],
+                        d.Rate AS [Unit Rate],
+                        (d.Quantity * d.Rate) AS [Line Total],
+                        ISNULL(h.Status, 'Pending') AS [Status]
+                    FROM mridul.SalesOrderHeader h
+                    INNER JOIN mridul.SalesOrderDetails d ON h.SO_ID = d.SO_ID
+                    LEFT JOIN mridul.PartyMaster c ON h.CustomerID = c.PartyID
+                    LEFT JOIN mridul.ProductMaster p ON d.ProductID = p.ProductID
+                    WHERE CAST(h.OrderDate AS DATE) BETWEEN @fromDate AND @toDate
+                    ORDER BY h.OrderDate DESC, h.SO_ID DESC
+                `;
+                break;
+
+            case 'stock':
+                query = `
+                    SELECT 
+                        p.ProductID AS [Product ID],
+                        p.ProductName AS [Product Name],
+                        ISNULL(b.BrandName, '—') AS [Brand],
+                        ISNULL(p.MaterialType, 'Finished Good') AS [Material Type],
+                        ISNULL(p.ItemState, 'Solid') AS [State],
+                        ISNULL(p.UnitOfMeasure, 'Pcs') AS [UOM],
+                        ISNULL(p.ClosingBalance, 0) AS [Current Stock],
+                        CASE 
+                            WHEN ISNULL(p.ClosingBalance, 0) <= 50 THEN 'LOW STOCK'
+                            ELSE 'OK'
+                        END AS [Stock Status]
+                    FROM mridul.ProductMaster p
+                    LEFT JOIN mridul.BrandMaster b ON p.BrandID = b.BrandID
+                    ORDER BY p.ClosingBalance ASC, p.ProductName ASC
+                `;
+                break;
+
+            case 'production':
+                query = `
+                    SELECT 
+                        CONVERT(VARCHAR(10), fg.ReceiptDate, 120) AS [Date],
+                        'PRD-' + CAST(fg.ProductionOrderID AS VARCHAR) AS [Production Order],
+                        ISNULL(p.ProductName, 'Unknown') AS [Product],
+                        ISNULL(fg.ProducedQuantity, 0) AS [Good Yield],
+                        ISNULL(fg.WastageQuantity, 0) AS [Wastage],
+                        ISNULL(fg.LoggedBy, 'System') AS [Logged By]
+                    FROM mridul.FinishedGoodsReceipt fg
+                    LEFT JOIN mridul.ProductMaster p ON fg.ProductID = p.ProductID
+                    WHERE CAST(fg.ReceiptDate AS DATE) BETWEEN @fromDate AND @toDate
+                    ORDER BY fg.ReceiptDate DESC
+                `;
+                break;
+
+            case 'purchases':
+                query = `
+                    SELECT 
+                        pr.GRN_Number AS [GRN Number],
+                        CONVERT(VARCHAR(10), pr.ReceiptDate, 120) AS [Receipt Date],
+                        ISNULL(v.PartyName, 'Unknown') AS [Vendor],
+                        ISNULL(p.ProductName, 'Unknown') AS [Product],
+                        pr.ReceivedQty AS [Received Qty],
+                        ISNULL(t.TankName, 'Warehouse') AS [Storage],
+                        ISNULL(pr.InvoiceNo, '—') AS [Invoice No],
+                        ISNULL(pr.VehicleNo, '—') AS [Vehicle No],
+                        ISNULL(pr.ReceivedBy, 'System') AS [Received By]
+                    FROM mridul.PurchaseReceiving pr
+                    LEFT JOIN mridul.PartyMaster v ON pr.VendorID = v.PartyID
+                    LEFT JOIN mridul.ProductMaster p ON pr.ProductID = p.ProductID
+                    LEFT JOIN mridul.TankMaster t ON pr.TankID = t.TankID
+                    WHERE CAST(pr.ReceiptDate AS DATE) BETWEEN @fromDate AND @toDate
+                    ORDER BY pr.ReceiptDate DESC
+                `;
+                break;
+
+            default:
+                return res.status(400).json({ error: 'Invalid report type.' });
+        }
+
+        const result = await request.query(query);
+        res.status(200).json(result.recordset);
+    } catch (err) {
+        console.error(`Report Error [${type}]:`, err.message);
+        res.status(500).json({ error: 'Failed to generate report', details: err.message });
+    }
+});
+
+// ==========================================
 // ROLE ALLOCATION & SECURITY ROUTES
 // ==========================================
 // Fetch all system users
